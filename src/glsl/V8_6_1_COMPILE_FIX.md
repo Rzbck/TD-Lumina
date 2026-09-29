@@ -1,0 +1,1 @@
+V8.6.1 compile fix: in pixel_render_compute_v8_6.glsl, two boolean OR operators were accidentally written as line comments. Replace the standalone `//` between `(a == n0 && b == n1)` and `(a == n1 && b == n0)` with `||`, and replace the standalone `//` between `life <= 0.0` and `energy < 0.006` with `||`.
