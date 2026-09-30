@@ -126,13 +126,17 @@ Every scene is treated independently and must be:
 5. revised without requiring unrelated scenes to change;
 6. explicitly marked `VALIDATED` by the user before TouchDesigner integration.
 
+Transitions are also first-class reviewed objects. Scene A and scene B can both be good while a specific A -> B handoff is still rejected. Follow `scene-lab/TRANSITION_CONTRACT.md`.
+
 The preferred first runner is lightweight WebGL2 / pure GLSL. The scene specification and review data remain engine-neutral so Godot or another runner may be substituted later.
 
 See:
 
 - `scene-lab/README.md`
 - `scene-lab/SCENE_CONTRACT.md`
+- `scene-lab/TRANSITION_CONTRACT.md`
 - `scene-lab/REVIEW_WORKFLOW.md`
+- `scene-lab/review-schema.json`
 - `scene-lab/scene-registry.json`
 - `scene-lab/NEXT_AI_PROMPT.md`
 
@@ -160,7 +164,7 @@ After integration, compare the TD result against the standalone reference before
 
 ## Initial Scene Lab prototype set
 
-The current standalone registry starts with 12 unvalidated prototypes:
+The registry contains 12 unvalidated directions:
 
 1. Tunnel Ribs
 2. Ceiling River
@@ -176,6 +180,14 @@ The current standalone registry starts with 12 unvalidated prototypes:
 12. Sonic Weave
 
 These names do not imply acceptance. They are starting points for scene-by-scene review.
+
+The first implementation milestone should **not** implement all 12 at once. First prove the complete author/review/version/transition loop with:
+
+- Scene 1 — Tunnel Ribs;
+- Scene 4 — Parallel Chambers;
+- Scene 11 — Living Pixel Species.
+
+Then expand the registry only after those three can be selected, reproduced, criticized, rated, versioned and transitioned independently.
 
 ## Non-regression rule
 
