@@ -14,41 +14,44 @@ Before writing code, read in this order:
 
 1. `AGENTS.md`
 2. `docs/ARCH_SEMANTICS.md`
-3. `docs/VISUAL_LANGUAGE.md`
-4. `scene-lab/README.md`
-5. `scene-lab/SCENE_CONTRACT.md`
-6. `scene-lab/REVIEW_WORKFLOW.md`
-7. `scene-lab/scene-registry.json`
-8. `scene-lab/review-schema.json`
+3. `docs/PROJECT_MEMORY.md`
+4. `docs/VISUAL_LANGUAGE.md`
+5. `scene-lab/README.md`
+6. `scene-lab/SCENE_CONTRACT.md`
+7. `scene-lab/TRANSITION_CONTRACT.md`
+8. `scene-lab/REVIEW_WORKFLOW.md`
+9. `scene-lab/scene-registry.json`
+10. `scene-lab/review-schema.json`
 
-Do not replace or simplify the semantic architecture after reading it.
+Treat those files as the source of truth. Do not replace or simplify the semantic architecture after reading it.
 
 ## Goal
 
 Create a lightweight local **Scene Lab** that runs well on a modest laptop and lets the user work scene-by-scene.
 
-Preferred implementation: **WebGL2 + pure GLSL + lightweight TypeScript/JavaScript UI**. Avoid Electron and heavy frameworks unless there is a demonstrated need. A small Vite-style local app is acceptable. Godot may be considered only if it clearly improves the workflow while keeping scene definitions engine-neutral.
+Preferred implementation: **WebGL2 + pure GLSL + lightweight TypeScript/JavaScript UI**. Avoid Electron and heavy frameworks unless there is a demonstrated need. A small Vite-style local app is acceptable.
+
+Godot may be added later for a richer 3D walk-through, but the first renderer should stay WebGL2 because scene logic will eventually return to TouchDesigner GLSL. Scene definitions and review data must remain engine-neutral.
 
 The user must be able to:
 
-- select any scene independently;
+- select any implemented scene independently;
 - start / pause / restart it;
 - scrub through its lifecycle;
 - run it at configurable BPM;
 - emulate calm / rhythmic / energetic musical contexts;
 - inspect the 9 arches, T1..T5, ceiling halves, sides and 32 semantic zones;
 - switch between flattened semantic view and a simple tunnel/arch spatial preview if feasible;
-- force `STRICT`, `OFF` or authored `RELEASE` symmetry for debugging where the scene contract allows it;
 - select deterministic random seeds;
-- compare two versions of the same scene if practical;
-- select scene A and scene B and repeatedly test the transition A -> B;
+- select scene A and scene B and repeatedly test transition A -> B;
 - write free-form critique while the scene is playing;
-- enter 1-5 diagnostic ratings defined in `review-schema.json`;
+- enter diagnostic ratings defined in `review-schema.json`;
 - record blocking issues, things to keep and next changes;
 - save review records without overwriting previous reviews;
 - export/import review JSON;
 - see scene status and version from `scene-registry.json`;
-- see FPS / frame time.
+- see FPS / frame time;
+- reproduce a review from scene version + seed + BPM + capture beat/time.
 
 ## Critical visual requirement
 
@@ -80,9 +83,11 @@ Use the real semantic architecture, not approximate screen-space rectangles:
   - 3 `RIGHT_UPRIGHT`
 - ceiling = bands 1 + 2;
 - longitudinal physical span = 12 m;
-- cross-arch U path = 6.89966 m.
+- cross-arch U path = 6.89966 m;
+- exact Sender X samples = `0, 89, 179, 269, 359, 450, 539, 629, 719`;
+- exact Sender Y samples = `1, 134, 208, 281, 414`.
 
-Read exact Sender coordinates and physical details from `docs/ARCH_SEMANTICS.md`.
+Read all exact physical details from `docs/ARCH_SEMANTICS.md`.
 
 Create a reusable semantic geometry module. Scene code must query semantic arch/traverse/bay/band/zone IDs rather than duplicating geometry logic in every scene.
 
@@ -107,9 +112,9 @@ Shared semantic geometry, palettes, rhythm utilities and transition utilities be
 
 Do not create dozens of UI sliders to compensate for weak scene design. Debug controls are allowed, but the finished scene behavior must be authored in code.
 
-## Initial scene set
+## Scene registry
 
-Implement the 12 entries already listed in `scene-registry.json` as **prototypes**, not validated scenes:
+`scene-lab/scene-registry.json` contains 12 current design directions:
 
 1. Tunnel Ribs
 2. Ceiling River
@@ -124,19 +129,42 @@ Implement the 12 entries already listed in `scene-registry.json` as **prototypes
 11. Living Pixel Species
 12. Sonic Weave
 
-Do not merely make twelve color/name variants. Each must have a visibly distinct spatial and motion grammar.
+These are starting directions, not validated art. Do not merely make twelve color/name variants.
 
-### Important examples
+## First implementation milestone — do not implement all 12 at once
 
-`Parallel Chambers` should construct several semantic zone chambers and, once their boundaries exist, animate internal arches/traverses so the completed geometry remains alive.
+First build the Scene Lab shell and prove the entire granular workflow with only three very different scenes:
 
-`Mirror Cathedral` must be truly strict: all visible structure, moving elements and trails mirror correctly.
+### Scene 1 — Tunnel Ribs
 
-`Symmetry Release Journey` must visibly begin in strict symmetry, then intentionally release into one asymmetric full-tunnel route. The asymmetry is the event.
+- several architectural arches visible at once;
+- multiple parallel longitudinal fronts;
+- real movement through the 12 m depth;
+- enough FOUNDATION to reveal the tunnel;
+- optional coherent symmetry.
 
-`Zone Relay` must visibly use the 32 mapped zones instead of drawing arbitrary rectangles.
+### Scene 4 — Parallel Chambers
 
-`Living Pixel Species` must contain multiple independent pixel populations with different lengths, speeds, phase offsets and routes. They may share BPM/bar timing but must not look like one synchronized packet. A moving head never reverses halfway through an edge; route changes happen at junctions.
+- build chambers from real semantic zones;
+- use several chambers simultaneously;
+- once a chamber is complete, animate internal arches/traverses so it stays alive;
+- shadow remains deliberately designed between chambers.
+
+### Scene 11 — Living Pixel Species
+
+- multiple independent pixel species;
+- different lengths/tail lengths;
+- different speeds;
+- different phase offsets;
+- arch-path and traverse-path species;
+- shared musical timing without synchronized packet motion;
+- route changes only at junctions, never visible mid-edge reversals.
+
+Then implement at least one repeatable transition between each pair and make review persistence work.
+
+Only after the user can independently select, criticize, rate, version and reproduce these three scenes should you expand to the remaining registry.
+
+This rule exists to prevent another situation where many scene names produce only a few real visual grammars.
 
 ## Rhythm / audio simulation
 
@@ -171,7 +199,7 @@ No rainbow cycling.
 
 ## Transition Lab
 
-Transitions are first-class objects, not afterthoughts.
+Transitions are first-class objects, not afterthoughts. Follow `scene-lab/TRANSITION_CONTRACT.md`.
 
 Create a mode where the user chooses scene A and scene B and loops A -> transition -> B.
 
@@ -179,47 +207,34 @@ Initial semantic transition grammars should include:
 
 - longitudinal handoff;
 - left/ceiling/right handoff;
-- center expansion/collapse;
-- semantic zone dissolve;
-- outgoing path reaches the starting zone of incoming motion.
+- semantic zone relay;
+- symmetry collapse / release;
+- structural inheritance;
+- draw / retract.
 
-A transition must not replace unrelated geometry in one frame.
+A transition must not replace unrelated geometry in one frame and should not create an accidental black dip.
 
 ## Review UI
 
 Create a review panel based on `review-schema.json`.
 
-The user must be able to save a review such as:
+The user must be able to save review data containing at least:
 
-```json
-{
-  "scene_id": 4,
-  "scene_version": "0.2",
-  "reviewed_at": "...",
-  "music_context": "rhythmic",
-  "ratings": {
-    "architecture_readability": 4,
-    "light_shadow_balance": 3,
-    "movement_quality": 4,
-    "internal_evolution": 2,
-    "spatial_use": 5,
-    "symmetry_quality": 4,
-    "asymmetry_quality": 3,
-    "pixel_liveliness": 3,
-    "music_sync": 4,
-    "transition_quality": 2,
-    "originality": 4,
-    "performance": 5
-  },
-  "notes": ["..."],
-  "blocking_issues": ["interior becomes static after construction"],
-  "keep": ["three chamber composition"],
-  "change_next": ["animate internal traverses after closure"],
-  "decision": "REVISION"
-}
-```
+- scene ID + version;
+- seed;
+- BPM;
+- capture beat/time;
+- music context;
+- ratings;
+- free-form notes;
+- blocking issues;
+- `keep` list;
+- `change_next` list;
+- decision/status.
 
-Reviews should be append-only. Preserve previous critique so visual evolution can be understood later.
+Reviews are append-only. Preserve previous critique so visual evolution can be understood later.
+
+A low score is useful. Do not inflate ratings to make a scene look finished.
 
 ## Workflow / Git
 
@@ -227,22 +242,37 @@ Work in `scene-lab/` only for this task, except for small documentation links if
 
 Do not modify TouchDesigner patches, GLSL runtime snapshots, semantic POP setup, DMX/Art-Net output or the structural chain.
 
-Use a feature branch/PR for the implementation. `main` currently holds the accepted foundation and Scene Lab specification.
+Use a feature branch/PR for implementation. `main` holds the accepted foundation and Scene Lab specification.
 
 Make incremental commits by concern: semantic geometry, runner, review UI, transition lab, individual scenes.
 
-## Definition of done for the first implementation
+Never rewrite several scene implementations just because one scene received bad review feedback.
 
-The task is complete only when:
+## TouchDesigner invariants for later integration
+
+Do not edit these during Scene Lab development:
+
+- root `/project1/Renders/Saison3/base2/new1`;
+- structural chain `grid1 -> group1 -> transform3 -> group2 -> transform4 -> endGrid`;
+- `ARCH_NODE_SEMANTICS`;
+- `ARCH_EDGE_SEMANTICS`;
+- camera orthographic width `1.0`;
+- `pixel_divide = 100` unless measured profiling later proves otherwise;
+- downstream Art-Net / DMX mapping.
+
+## Definition of done for the first Scene Lab milestone
+
+The first milestone is complete only when:
 
 - the app launches locally with documented commands;
-- all 12 scenes are independently selectable;
-- at least the semantic flattened preview is correct;
+- Scene 1, Scene 4 and Scene 11 are independently selectable;
+- the semantic flattened preview is correct;
 - scene play/pause/restart/scrub works;
 - deterministic seed works;
 - calm/rhythmic/energetic test contexts work;
-- transition A -> B testing works;
-- review notes + 1-5 ratings can be saved/exported;
+- transition A -> B testing works for those three scenes;
+- review notes + ratings can be saved/exported and reloaded;
+- a review can be reproduced from version + seed + BPM + capture beat/time;
 - FPS is visible;
 - no scene is falsely marked `VALIDATED`;
 - README explains how to use the lab;
