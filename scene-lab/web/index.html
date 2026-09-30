@@ -24,13 +24,20 @@
   <main class="layout">
     <aside class="sidebar left-panel">
       <section>
-        <h2>Scène</h2>
+        <div class="section-title-row">
+          <h2>Scène</h2>
+          <span class="count-badge">50 prototypes</span>
+        </div>
         <label>
-          Mode
-          <select id="sceneSelect"></select>
+          Recherche
+          <input id="sceneSearch" type="search" placeholder="Nom ou numéro…" autocomplete="off" />
+        </label>
+        <label>
+          Shader
+          <select id="sceneSelect" size="10"></select>
         </label>
         <div class="small mono" id="sceneMeta"></div>
-        <p class="small">Registre complet : 12 scènes. Ce premier jalon implémente réellement 1, 4 et 11 ; les autres restent dans le registre et seront ajoutées sans les simuler avec de faux presets.</p>
+        <p class="small">50 directions sont réellement compilables et sélectionnables. Elles restent des prototypes : la notation sert à éliminer, conserver et réviser les bonnes grammaires.</p>
       </section>
 
       <section>
@@ -54,10 +61,12 @@
         <label>
           Vue
           <select id="viewMode">
-            <option value="1" selected>Tunnel physique 3D</option>
-            <option value="0">Carte Sender / sémantique 2D</option>
+            <option value="1" selected>Tunnel perspective</option>
+            <option value="2">Déplié métrique 1:1 — contrôle pixels</option>
+            <option value="0">Carte Sender / sémantique</option>
           </select>
         </label>
+        <p class="small">La vue métrique 1:1 applique la même échelle écran par mètre dans les deux axes. Utilise-la pour juger l’espacement des LEDs sans distorsion de perspective.</p>
       </section>
 
       <section>
@@ -84,7 +93,7 @@
         <input id="timeline" type="range" min="0" max="120" step="0.001" value="0" aria-label="Timeline" />
         <div class="timeline-row">
           <span>0 s</span>
-          <span class="small">Scrub déterministe — le même seed + temps = le même état</span>
+          <span class="small">Scrub déterministe — même version + shader + seed + temps = même état</span>
           <span>120 s</span>
         </div>
       </div>
@@ -93,7 +102,7 @@
     <aside class="sidebar right-panel">
       <section class="feedback-section">
         <div class="section-title-row">
-          <h2>Retour</h2>
+          <h2>Retour à l’instant T</h2>
           <span class="small">append-only</span>
         </div>
 
@@ -108,16 +117,27 @@
 
         <label>
           Commentaire
-          <textarea id="commentInput" rows="8" placeholder="Ex. Le mouvement est bien ici, mais le pixel semble repartir en arrière juste avant l’intersection…"></textarea>
+          <textarea id="commentInput" rows="6" placeholder="Ex. Le mouvement est bon mais il se resserre trop en profondeur juste avant l’intersection…"></textarea>
         </label>
 
         <div class="mic-row">
-          <button id="micButton" type="button" class="secondary" disabled>Micro FR</button>
-          <span id="micStatus" class="small">Vérification du micro…</span>
+          <button id="micButton" type="button" class="secondary" disabled>Dicter en français</button>
+          <span id="micStatus" class="small">Initialisation du micro local…</span>
         </div>
+      </section>
 
+      <section>
+        <div class="section-title-row">
+          <h2>Notes du shader</h2>
+          <span class="small">1 mauvais · 3 moyen · 5 excellent</span>
+        </div>
+        <p class="small">Note seulement les aspects pertinents. « — » = non applicable. Les notes sont enregistrées avec le même snapshot que ton commentaire.</p>
+        <div id="ratingMatrix" class="rating-matrix"></div>
+      </section>
+
+      <section>
         <div class="feedback-actions">
-          <button id="saveFeedback" class="primary">Enregistrer le retour</button>
+          <button id="saveFeedback" class="primary">Enregistrer retour + notes</button>
           <span id="saveStatus" class="small"></span>
         </div>
 
@@ -125,11 +145,6 @@
           <div class="small">Snapshot attaché</div>
           <pre id="snapshotPreview">LIVE — sera capturé au moment de l’envoi</pre>
         </div>
-      </section>
-
-      <section>
-        <h2>Principe</h2>
-        <p class="small">Si tu mets pause, l’instant exact devient la référence du commentaire. Le retour stocke aussi une fenêtre de contexte avant pause pour comprendre le mouvement qui vient de se produire.</p>
       </section>
     </aside>
   </main>
