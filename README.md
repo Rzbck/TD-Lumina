@@ -24,6 +24,24 @@ Important semantic facts:
 - semantic mapping happens before `pixel_divide`, so dense pixels inherit architectural meaning;
 - Art-Net/DMX output is downstream and must not be modified by scene development.
 
+## Scene Lab
+
+Visual scene design is now deliberately separated from TouchDesigner integration.
+
+[`scene-lab/`](scene-lab/) is the standalone R&D and review workspace where every scene can be developed independently against the canonical tunnel semantics, played alone, tested against simulated musical contexts, reviewed with written critique and diagnostic ratings, versioned, revised and validated before being ported back into TouchDesigner.
+
+Key rule: **a scene is not integrated into TouchDesigner while its visual language is still being discovered.**
+
+The preferred first runner is a lightweight local WebGL2 / pure-GLSL application. The Scene Lab specification remains engine-neutral so Godot or another renderer can be used later without changing the semantic scene definitions or review history.
+
+Start here:
+
+- [`scene-lab/README.md`](scene-lab/README.md) — purpose, architecture and workflow.
+- [`scene-lab/SCENE_CONTRACT.md`](scene-lab/SCENE_CONTRACT.md) — mandatory visual/semantic contract for every scene.
+- [`scene-lab/REVIEW_WORKFLOW.md`](scene-lab/REVIEW_WORKFLOW.md) — granular scene review method.
+- [`scene-lab/scene-registry.json`](scene-lab/scene-registry.json) — machine-readable scene/status catalog.
+- [`scene-lab/NEXT_AI_PROMPT.md`](scene-lab/NEXT_AI_PROMPT.md) — ready-to-use prompt for the next implementation AI.
+
 ## Runtime constraints
 
 - TouchDesigner: **2025.33070**
@@ -43,10 +61,11 @@ Important semantic facts:
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — TouchDesigner graph and data flow.
 - [`docs/DECISIONS.md`](docs/DECISIONS.md) — important design decisions and why they were made.
 - [`docs/TEST_PROTOCOL.md`](docs/TEST_PROTOCOL.md) — how every new version must be evaluated.
+- [`scene-lab/`](scene-lab/) — standalone scene design, transition testing and review workspace.
 - [`src/glsl/`](src/glsl/) — canonical GLSL snapshots.
 - [`src/python/`](src/python/) — music-analysis brain snapshots.
 - [`patches/`](patches/) — complete TouchDesigner injection scripts.
 
 ## Working rule
 
-GitHub is the long-term source of truth. Chat history is useful context, but accepted physical facts, semantic attributes, architecture constraints, rejected behaviors and next actions must be written here so a new ChatGPT/Codex session can resume without reconstructing the project from memory.
+GitHub is the long-term source of truth. Chat history is useful context, but accepted physical facts, semantic attributes, architecture constraints, rejected behaviors, scene reviews and next actions must be written here so a new ChatGPT/Codex session can resume without reconstructing the project from memory.
