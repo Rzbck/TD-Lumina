@@ -4,14 +4,18 @@ Read these files before modifying code:
 
 1. `docs/PROJECT_MEMORY.md`
 2. `docs/ARCH_SEMANTICS.md`
-3. `docs/GENERATIVE_SYSTEMS.md`
-4. `docs/LUMINA_V3_EFFECT_LIBRARY.md`
-5. `docs/COLOR_ENGINE.md`
-6. `docs/VISUAL_LANGUAGE.md`
-7. `docs/ARCHITECTURE.md`
-8. `docs/DECISIONS.md`
-9. `docs/TEST_PROTOCOL.md`
-10. latest relevant file in `docs/reviews/`
+3. `scene-lab/README.md`
+4. `scene-lab/SCENE_CONTRACT.md`
+5. `scene-lab/REVIEW_WORKFLOW.md`
+6. `scene-lab/scene-registry.json`
+7. `docs/GENERATIVE_SYSTEMS.md`
+8. `docs/LUMINA_V3_EFFECT_LIBRARY.md`
+9. `docs/COLOR_ENGINE.md`
+10. `docs/VISUAL_LANGUAGE.md`
+11. `docs/ARCHITECTURE.md`
+12. `docs/DECISIONS.md`
+13. `docs/TEST_PROTOCOL.md`
+14. latest relevant file in `docs/reviews/` and `scene-lab/reviews/`
 
 ## Non-negotiable topology
 
@@ -102,6 +106,29 @@ Important values:
 
 Never invent an unknown per-bay LED count. Use semantic IDs plus physical/Sender coordinates.
 
+## Scene Lab development rule
+
+Scene discovery and visual iteration now happen in `scene-lab/` before TouchDesigner integration.
+
+The standalone lab must use the same semantic architecture as TouchDesigner, but it must not modify the TouchDesigner runtime while scenes are still being discovered.
+
+Every scene is independently selectable, versioned and reviewed. A scene is ported back into TouchDesigner only after the user explicitly validates it in the standalone lab.
+
+Every standalone scene must follow `scene-lab/SCENE_CONTRACT.md` and contain:
+
+- FOUNDATION — enough architectural light to reveal the tunnel;
+- MOTION — meaningful travel/growth/wave/relay/living-pixel behavior;
+- ACCENT — sparse punctuation, not permanent white dominance;
+- explicit symmetry policy;
+- internal evolution;
+- authored entrance and exit;
+- clear music/timing role;
+- no accidental long near-black state while active music is present.
+
+Do not hide a weak scene by layering generic effects on top. Improve the scene itself.
+
+Standalone reviews are append-only and follow `scene-lab/review-schema.json`. Do not mark a scene `VALIDATED` without explicit user acceptance.
+
 ## Capability non-regression
 
 `docs/GENERATIVE_SYSTEMS.md` and `docs/LUMINA_V3_EFFECT_LIBRARY.md` are permanent capability registries.
@@ -132,11 +159,13 @@ Use full-spectrum novelty and adaptive baselines. Do not reduce music response t
 
 - Stable accepted foundations live on `main`.
 - Experimental visual changes go on a feature branch and PR.
+- Standalone Scene Lab implementation work should use a feature branch/PR; the Scene Lab specification itself is an accepted foundation on `main`.
 - Keep complete TouchDesigner injection patches in `patches/` once runtime-tested.
 - Keep corresponding GLSL/Python source snapshots in `src/` when runtime shader or brain logic changes.
 - Update `docs/PROJECT_MEMORY.md`, `docs/ARCH_SEMANTICS.md` and `docs/DECISIONS.md` when architecture changes.
 - Record explicit user likes/dislikes in `docs/VISUAL_LANGUAGE.md`.
 - Add a dated `docs/reviews/` note when a user video materially changes the diagnosis.
+- Add standalone scene reviews under `scene-lab/reviews/` without overwriting previous reviews.
 
 ## Validation
 
@@ -146,3 +175,11 @@ Do not call a runtime version complete until:
 - The semantic reference inputs are still connected at agent input 2 and pixel renderer input 3.
 - A visual version has been reviewed for repetition, darkness, symmetry purity, mobile-head autonomy, timing, junction behavior, music sensitivity and regional use.
 - The previous working shader/script is recoverable through backup or git history.
+
+Do not call a Scene Lab scene complete until:
+
+- it has been reviewed individually in multiple music contexts;
+- its written review has no blocking issues;
+- the user explicitly accepts it;
+- its registry status is changed to `VALIDATED`;
+- only then is TouchDesigner integration allowed.
