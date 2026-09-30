@@ -20,6 +20,8 @@ A scene is now treated as an independent visual object that can be:
 - accepted, rejected or sent back for revision;
 - imported back into TouchDesigner only after validation.
 
+Transitions are reviewed independently too. A scene can be good while a specific A -> B handoff is still bad.
+
 ## Recommended implementation
 
 The repository is intentionally engine-independent, but the preferred first runner is a very small local **WebGL2 / pure GLSL** application.
@@ -33,7 +35,7 @@ Reasons:
 - easy JSON persistence for scene metadata and reviews;
 - no need to rebuild the TouchDesigner project during scene design.
 
-Godot 4 is an acceptable alternative if its editor/UI workflow becomes more useful, but scene definitions and review data must stay engine-neutral so the project is not locked to Godot.
+Godot 4 is an acceptable later option if a richer 3D walk-through becomes useful, but scene definitions and review data must stay engine-neutral so the project is not locked to Godot.
 
 ## Canonical architecture model
 
@@ -98,6 +100,23 @@ Each scene gets a review record containing ratings and free-form critique. The c
 
 See `REVIEW_WORKFLOW.md` and `review-schema.json`.
 
+## Transition Lab
+
+Transitions are first-class authored objects.
+
+The lab must let the reviewer choose scene A and scene B, loop the handoff and judge it separately from the two scenes.
+
+Initial handoff families include:
+
+- longitudinal travel;
+- left / ceiling / right cross-arch handoff;
+- semantic zone relay;
+- symmetry collapse / release;
+- structural inheritance;
+- draw / retract.
+
+See `TRANSITION_CONTRACT.md`.
+
 ## Status vocabulary
 
 Each scene has one status:
@@ -112,13 +131,28 @@ Each scene has one status:
 
 Only `VALIDATED` scenes should be ported into TouchDesigner. `TD_INTEGRATED` means the standalone version and the TD runtime version have been visually compared and accepted.
 
+## First implementation milestone
+
+Do **not** rush to implement all 12 scene names at once.
+
+First prove the Scene Lab shell and granular workflow with three very different scenes:
+
+1. `Tunnel Ribs` — several arches plus multiple longitudinal fronts;
+2. `Parallel Chambers` — real zone-based chambers that continue to live internally after construction;
+3. `Living Pixel Species` — independent pixel populations with different lengths, speeds, paths and rhythmic coupling.
+
+Then prove at least one reviewed transition between each pair. Once selecting, reproducing, rating, commenting and versioning those three works correctly, expand to the remaining registry.
+
+This prevents another "many scene names, few real visual grammars" failure.
+
 ## Directory map
 
 - `scene-registry.json` — machine-readable scene catalog and status.
 - `SCENE_CONTRACT.md` — mandatory scene design rules.
+- `TRANSITION_CONTRACT.md` — authored handoff rules.
 - `REVIEW_WORKFLOW.md` — granular review / iteration method.
 - `review-schema.json` — review data format for the future local UI.
-- `scenes/` — one independent scene specification per scene.
+- `scenes/` — one independent scene implementation/specification per scene.
 - `reviews/` — review history; never overwrite old critique.
 - `NEXT_AI_PROMPT.md` — handoff prompt for the next coding/design AI.
 
