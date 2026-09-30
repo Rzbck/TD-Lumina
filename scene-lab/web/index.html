@@ -30,6 +30,7 @@
           <select id="sceneSelect"></select>
         </label>
         <div class="small mono" id="sceneMeta"></div>
+        <p class="small">Registre complet : 12 scènes. Ce premier jalon implémente réellement 1, 4 et 11 ; les autres restent dans le registre et seront ajoutées sans les simuler avec de faux presets.</p>
       </section>
 
       <section>
@@ -53,8 +54,8 @@
         <label>
           Vue
           <select id="viewMode">
-            <option value="1" selected>Tunnel perspective</option>
-            <option value="0">Carte sémantique 2D</option>
+            <option value="1" selected>Tunnel physique 3D</option>
+            <option value="0">Carte Sender / sémantique 2D</option>
           </select>
         </label>
       </section>
@@ -74,6 +75,7 @@
         <div class="hud">
           <span id="statusChip" class="chip live">LIVE</span>
           <span id="shaderChip" class="chip"></span>
+          <span class="chip">7306 LEDs physiques</span>
           <span id="snapshotChip" class="chip hidden"></span>
         </div>
       </div>
