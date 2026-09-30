@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import re
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -21,11 +23,33 @@ ASSETS = REVIEWS / "assets"
 REGISTRY = ROOT / "scene-registry.json"
 REVIEW_SCHEMA = ROOT / "review-schema.json"
 SAFE_ID = re.compile(r"^[a-zA-Z0-9._-]{1,120}$")
+WHISPER_MODEL_NAME = os.getenv("LUMINA_WHISPER_MODEL", "small")
+WHISPER_DEVICE = os.getenv("LUMINA_WHISPER_DEVICE", "cpu")
+WHISPER_COMPUTE_TYPE = os.getenv("LUMINA_WHISPER_COMPUTE_TYPE", "int8")
+RATING_KEYS = {
+    "architecture_readability",
+    "physical_pixel_fidelity",
+    "light_shadow_balance",
+    "movement_quality",
+    "movement_continuity",
+    "internal_evolution",
+    "spatial_use",
+    "symmetry_quality",
+    "asymmetry_quality",
+    "pixel_liveliness",
+    "music_sync",
+    "color_palette",
+    "originality",
+    "repetition_control",
+    "transition_quality",
+    "performance",
+}
 
 EVENTS.mkdir(parents=True, exist_ok=True)
 ASSETS.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="Lumina Scene Lab", version="0.1.0")
+app = FastAPI(title="Lumina Scene Lab", version="0.2.0")
+_whisper_model: Any | None = None
 
 
 class FeedbackPayload(BaseModel):
@@ -33,8 +57,14 @@ class FeedbackPayload(BaseModel):
     reference_type: str = Field(pattern=r"^(instant|just_seen|desired)$")
     comment: str = Field(min_length=1, max_length=20000)
     snapshot: dict[str, Any]
+    ratings: dict[str, int | None] = Field(default_factory=dict)
     pause_image: str | None = None
     context_frames: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class TranscriptionPayload(BaseModel):
+    audio_data: str = Field(min_length=16, max_length=40_000_000)
+    language: str = Field(default="fr", pattern=r"^[a-zA-Z-]{2,12}$")
 
 
 def utc_now() -> str:
@@ -55,7 +85,27 @@ def decode_data_url(data_url: str, expected_prefix: str) -> bytes:
         _, encoded = data_url.split(",", 1)
         return base64.b64decode(encoded, validate=True)
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail="Invalid base64 image") from exc
+        raise HTTPException(status_code=400, detail="Invalid base64 payload") from exc
+
+
+def decode_audio_data_url(data_url: str) -> tuple[bytes, str]:
+    if not data_url.startswith("data:audio/") or ";base64," not in data_url:
+        raise HTTPException(status_code=400, detail="Invalid audio payload")
+    try:
+        header, encoded = data_url.split(",", 1)
+        mime = header[5:].split(";", 1)[0].lower()
+        raw = base64.b64decode(encoded, validate=True)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="Invalid base64 audio") from exc
+    suffixes = {
+        "audio/webm": ".webm",
+        "audio/ogg": ".ogg",
+        "audio/mp4": ".m4a",
+        "audio/mpeg": ".mp3",
+        "audio/wav": ".wav",
+        "audio/x-wav": ".wav",
+    }
+    return raw, suffixes.get(mime, ".webm")
 
 
 def write_exclusive(path: Path, data: bytes | str) -> None:
@@ -65,6 +115,39 @@ def write_exclusive(path: Path, data: bytes | str) -> None:
         fh.write(data)
 
 
+def validated_ratings(values: dict[str, int | None]) -> dict[str, int | None]:
+    ratings: dict[str, int | None] = {}
+    for key, value in values.items():
+        if key not in RATING_KEYS:
+            continue
+        if value is None:
+            ratings[key] = None
+            continue
+        if not 1 <= int(value) <= 5:
+            raise HTTPException(status_code=400, detail=f"Rating {key} must be 1..5 or null")
+        ratings[key] = int(value)
+    return ratings
+
+
+def get_whisper_model() -> Any:
+    global _whisper_model
+    if _whisper_model is None:
+        try:
+            from faster_whisper import WhisperModel
+
+            _whisper_model = WhisperModel(
+                WHISPER_MODEL_NAME,
+                device=WHISPER_DEVICE,
+                compute_type=WHISPER_COMPUTE_TYPE,
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=503,
+                detail=f"Impossible de charger Faster-Whisper ({WHISPER_MODEL_NAME}): {exc}",
+            ) from exc
+    return _whisper_model
+
+
 @app.get("/api/health")
 def health() -> dict[str, Any]:
     return {
@@ -72,9 +155,12 @@ def health() -> dict[str, Any]:
         "project": "Lumina Scene Lab",
         "feedback_dir": str(EVENTS.relative_to(ROOT)),
         "microphone": {
-            "mode": "browser_speech_recognition_optional",
-            "language": "fr-FR",
-            "server_transcription": False,
+            "mode": "local_faster_whisper",
+            "language": "fr",
+            "server_transcription": True,
+            "model": WHISPER_MODEL_NAME,
+            "device": WHISPER_DEVICE,
+            "compute_type": WHISPER_COMPUTE_TYPE,
         },
     }
 
@@ -90,8 +176,58 @@ def config() -> dict[str, Any]:
             "context_window_seconds": 8,
             "context_frame_hz": 1,
             "pause_is_exact": True,
+            "rating_scale": [1, 2, 3, 4, 5],
+            "rating_keys": sorted(RATING_KEYS),
+        },
+        "transcription": {
+            "engine": "faster-whisper",
+            "model": WHISPER_MODEL_NAME,
+            "language": "fr",
+            "local": True,
         },
     }
+
+
+@app.post("/api/transcribe")
+def transcribe(payload: TranscriptionPayload) -> dict[str, Any]:
+    raw, suffix = decode_audio_data_url(payload.audio_data)
+    if len(raw) > 25_000_000:
+        raise HTTPException(status_code=413, detail="Enregistrement audio trop volumineux")
+
+    path: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(prefix="lumina_voice_", suffix=suffix, delete=False) as fh:
+            fh.write(raw)
+            path = fh.name
+
+        model = get_whisper_model()
+        segments, info = model.transcribe(
+            path,
+            language=payload.language,
+            beam_size=5,
+            vad_filter=True,
+            condition_on_previous_text=True,
+        )
+        text = " ".join(segment.text.strip() for segment in segments if segment.text.strip()).strip()
+        return {
+            "ok": True,
+            "text": text,
+            "language": getattr(info, "language", payload.language),
+            "language_probability": float(getattr(info, "language_probability", 0.0) or 0.0),
+            "duration": float(getattr(info, "duration", 0.0) or 0.0),
+            "model": WHISPER_MODEL_NAME,
+            "local": True,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Transcription impossible: {exc}") from exc
+    finally:
+        if path:
+            try:
+                Path(path).unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 @app.post("/api/feedback")
@@ -135,12 +271,13 @@ def save_feedback(payload: FeedbackPayload) -> dict[str, Any]:
         )
 
     record = {
-        "schema_version": 1,
+        "schema_version": 2,
         "kind": "feedback_event",
         "feedback_id": fid,
         "created_at": utc_now(),
         "reference_type": payload.reference_type,
         "comment": payload.comment.strip(),
+        "ratings": validated_ratings(payload.ratings),
         "snapshot": payload.snapshot,
         "pause_capture": pause_path,
         "context_frames": frame_records,
@@ -159,12 +296,13 @@ def save_feedback(payload: FeedbackPayload) -> dict[str, Any]:
         "event_path": str(event_path.relative_to(ROOT)),
         "pause_capture": pause_path,
         "context_frame_count": len(frame_records),
+        "rating_count": len(record["ratings"]),
     }
 
 
 @app.get("/api/feedback")
 def list_feedback(limit: int = 50) -> dict[str, Any]:
-    limit = max(1, min(200, limit))
+    limit = max(1, min(500, limit))
     files = sorted(EVENTS.glob("*.json"), reverse=True)[:limit]
     return {
         "items": [str(path.relative_to(ROOT)) for path in files],
