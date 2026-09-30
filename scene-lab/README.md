@@ -145,14 +145,76 @@ Then prove at least one reviewed transition between each pair. Once selecting, r
 
 This prevents another "many scene names, few real visual grammars" failure.
 
+## Local runner — V0.1
+
+The first standalone implementation lives in `scene-lab/web/` and is served by the lightweight FastAPI runner in `server.py`.
+
+From the repository root:
+
+```bash
+cd scene-lab
+uv sync
+uv run uvicorn server:app --reload --port 8765
+```
+
+Then open `http://127.0.0.1:8765` in a WebGL2-capable browser.
+
+Current prototype scenes:
+
+- `Tunnel Ribs`;
+- `Parallel Chambers`;
+- `Living Pixel Species`.
+
+The renderer has two views: a flattened semantic map and a simple perspective tunnel view. Both are driven by the same canonical 45-node / 76-edge semantic graph.
+
+### Transport and exact pause
+
+- `Space` toggles play/pause when focus is not inside an input field;
+- `R` restarts the scene;
+- left/right arrows scrub by 0.25 s;
+- the timeline can scrub directly;
+- BPM, deterministic seed and simulated musical context are editable.
+
+Pause is treated as a reproducible diagnostic event. A paused snapshot records the exact scene/version, shader signature, seed, BPM, musical context, time, beat, beat phase, bar/phrase position, palette, view mode and current agent states when applicable.
+
+The same `scene version + shader signature + seed + BPM + context + time` is the reproducibility key for the V0.1 runner.
+
+### Realtime feedback events
+
+The right panel records granular feedback independently from formal 1-5 scene reviews. A feedback event can refer to:
+
+- what is visible **now**;
+- what was **just seen**;
+- what the user **wants the scene to do**.
+
+When feedback is saved, the local server writes an append-only JSON record under `scene-lab/reviews/events/`. It also stores:
+
+- a PNG of the referenced instant;
+- up to roughly 8 seconds of low-resolution visual context from before the instant;
+- a 4 Hz state/timing history for that same recent window;
+- current per-agent edge/`segment_u` diagnostics for Living Pixel Species.
+
+Images are stored under `scene-lab/reviews/assets/<feedback_id>/`. See `feedback-schema.json`.
+
+This means a later code/design pass can distinguish "the frozen frame is wrong" from "the movement that led into this frame is wrong".
+
+### Microphone comments
+
+The UI optionally exposes browser speech recognition with language `fr-FR` when the browser provides `SpeechRecognition` / `webkitSpeechRecognition`.
+
+This is explicitly **experimental** and is not required for the review workflow. If the browser does not support it, the button disables itself. If recognition quality is not good enough in practice, keep using typed comments; no project feature depends on dictation.
+
 ## Directory map
 
 - `scene-registry.json` — machine-readable scene catalog and status.
 - `SCENE_CONTRACT.md` — mandatory scene design rules.
 - `TRANSITION_CONTRACT.md` — authored handoff rules.
 - `REVIEW_WORKFLOW.md` — granular review / iteration method.
-- `review-schema.json` — review data format for the future local UI.
-- `scenes/` — one independent scene implementation/specification per scene.
+- `review-schema.json` — formal review data format.
+- `feedback-schema.json` — realtime contextual feedback event format.
+- `web/` — WebGL2 Scene Lab runner and scene modules.
+- `server.py` / `pyproject.toml` — local `uv` runner and append-only feedback API.
+- `scenes/` — scene specifications / future engine-neutral artifacts.
 - `reviews/` — review history; never overwrite old critique.
 - `NEXT_AI_PROMPT.md` — handoff prompt for the next coding/design AI.
 

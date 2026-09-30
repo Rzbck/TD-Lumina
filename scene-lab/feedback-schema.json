@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Lumina Scene Lab Feedback Event",
+  "type": "object",
+  "required": ["schema_version", "kind", "feedback_id", "created_at", "reference_type", "comment", "snapshot"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "feedback_event"},
+    "feedback_id": {"type": "string"},
+    "created_at": {"type": "string"},
+    "reference_type": {
+      "type": "string",
+      "enum": ["instant", "just_seen", "desired"]
+    },
+    "comment": {"type": "string", "minLength": 1},
+    "snapshot": {
+      "type": "object",
+      "required": ["scene_id", "scene_slug", "scene_version", "shader_signature", "seed", "bpm", "music_context", "time_seconds", "beat"],
+      "properties": {
+        "scene_id": {"type": "integer"},
+        "scene_slug": {"type": "string"},
+        "scene_version": {"type": "string"},
+        "shader_signature": {"type": "string"},
+        "seed": {"type": "number"},
+        "bpm": {"type": "number"},
+        "music_context": {"type": "string"},
+        "time_seconds": {"type": "number"},
+        "beat": {"type": "number"},
+        "state_history": {"type": "array"},
+        "agents": {"type": "array"}
+      },
+      "additionalProperties": true
+    },
+    "pause_capture": {"type": ["string", "null"]},
+    "context_frames": {"type": "array"}
+  },
+  "additionalProperties": true
+}

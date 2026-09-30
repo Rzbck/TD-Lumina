@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lumina Scene Lab</title>
+  <link rel="stylesheet" href="/web/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">LUMINA</div>
+      <h1>Scene Lab</h1>
+    </div>
+    <div class="transport" aria-label="Transport">
+      <button id="playPause" class="primary">Pause</button>
+      <button id="restart">Restart</button>
+      <div class="metric"><span>Temps</span><strong id="timeReadout">0.000 s</strong></div>
+      <div class="metric"><span>Beat</span><strong id="beatReadout">0.000</strong></div>
+      <div class="metric"><span>FPS</span><strong id="fpsReadout">0</strong></div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar left-panel">
+      <section>
+        <div class="section-title-row">
+          <h2>Scène</h2>
+          <span class="count-badge">50 prototypes</span>
+        </div>
+        <label>
+          Recherche
+          <input id="sceneSearch" type="search" placeholder="Nom ou numéro…" autocomplete="off" />
+        </label>
+        <label>
+          Shader
+          <select id="sceneSelect" size="10"></select>
+        </label>
+        <div class="small mono" id="sceneMeta"></div>
+        <p class="small">50 directions sont réellement compilables et sélectionnables. Elles restent des prototypes : la notation sert à éliminer, conserver et réviser les bonnes grammaires.</p>
+      </section>
+
+      <section>
+        <h2>Contexte</h2>
+        <label>
+          BPM
+          <input id="bpmInput" type="number" min="1" max="300" step="1" value="120" />
+        </label>
+        <label>
+          Seed
+          <input id="seedInput" type="number" step="1" value="1337" />
+        </label>
+        <label>
+          Musique simulée
+          <select id="musicContext">
+            <option value="calm">Calme</option>
+            <option value="rhythmic" selected>Rythmique</option>
+            <option value="energetic">Énergique</option>
+          </select>
+        </label>
+        <label>
+          Vue
+          <select id="viewMode">
+            <option value="1" selected>Tunnel perspective</option>
+            <option value="2">Déplié métrique 1:1 — contrôle pixels</option>
+            <option value="0">Carte Sender / sémantique</option>
+          </select>
+        </label>
+        <p class="small">La vue métrique 1:1 applique la même échelle écran par mètre dans les deux axes. Utilise-la pour juger l’espacement des LEDs sans distorsion de perspective.</p>
+      </section>
+
+      <section>
+        <h2>Navigation</h2>
+        <div class="shortcut"><kbd>Espace</kbd><span>Play / Pause</span></div>
+        <div class="shortcut"><kbd>R</kbd><span>Restart</span></div>
+        <div class="shortcut"><kbd>← / →</kbd><span>- / + 0,25 s</span></div>
+        <p class="small">Les raccourcis sont désactivés quand tu écris dans un champ.</p>
+      </section>
+    </aside>
+
+    <section class="stage-column">
+      <div class="canvas-shell">
+        <canvas id="sceneCanvas"></canvas>
+        <div class="hud">
+          <span id="statusChip" class="chip live">LIVE</span>
+          <span id="shaderChip" class="chip"></span>
+          <span class="chip">7306 LEDs physiques</span>
+          <span id="snapshotChip" class="chip hidden"></span>
+        </div>
+      </div>
+
+      <div class="timeline-panel">
+        <input id="timeline" type="range" min="0" max="120" step="0.001" value="0" aria-label="Timeline" />
+        <div class="timeline-row">
+          <span>0 s</span>
+          <span class="small">Scrub déterministe — même version + shader + seed + temps = même état</span>
+          <span>120 s</span>
+        </div>
+      </div>
+    </section>
+
+    <aside class="sidebar right-panel">
+      <section class="feedback-section">
+        <div class="section-title-row">
+          <h2>Retour à l’instant T</h2>
+          <span class="small">append-only</span>
+        </div>
+
+        <label>
+          Je parle de…
+          <select id="referenceType">
+            <option value="instant">ce que je vois maintenant</option>
+            <option value="just_seen">ce que je viens de voir</option>
+            <option value="desired">ce que j’aimerais que ça fasse</option>
+          </select>
+        </label>
+
+        <label>
+          Commentaire
+          <textarea id="commentInput" rows="6" placeholder="Ex. Le mouvement est bon mais il se resserre trop en profondeur juste avant l’intersection…"></textarea>
+        </label>
+
+        <div class="mic-row">
+          <button id="micButton" type="button" class="secondary" disabled>Dicter en français</button>
+          <span id="micStatus" class="small">Initialisation du micro local…</span>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-title-row">
+          <h2>Notes du shader</h2>
+          <span class="small">1 mauvais · 3 moyen · 5 excellent</span>
+        </div>
+        <p class="small">Note seulement les aspects pertinents. « — » = non applicable. Les notes sont enregistrées avec le même snapshot que ton commentaire.</p>
+        <div id="ratingMatrix" class="rating-matrix"></div>
+      </section>
+
+      <section>
+        <div class="feedback-actions">
+          <button id="saveFeedback" class="primary">Enregistrer retour + notes</button>
+          <span id="saveStatus" class="small"></span>
+        </div>
+
+        <div class="snapshot-box">
+          <div class="small">Snapshot attaché</div>
+          <pre id="snapshotPreview">LIVE — sera capturé au moment de l’envoi</pre>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <div id="fatalError" class="fatal hidden"></div>
+  <script type="module" src="/web/app.js"></script>
+</body>
+</html>
