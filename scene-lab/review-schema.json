@@ -15,6 +15,11 @@
     "scene_id": {"type": "integer", "minimum": 1},
     "scene_version": {"type": "string"},
     "reviewed_at": {"type": "string"},
+    "seed": {"type": "number"},
+    "bpm": {"type": "number", "minimum": 1},
+    "capture_beat": {"type": "number", "minimum": 0},
+    "capture_seconds": {"type": "number", "minimum": 0},
+    "audio_source": {"type": "string"},
     "music_context": {
       "type": "string",
       "enum": ["calm", "rhythmic", "energetic", "mixed", "silence-test"]
