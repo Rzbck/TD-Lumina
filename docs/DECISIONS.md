@@ -102,3 +102,27 @@ Mandatory wiring:
 Removing these connections breaks topology attribute access such as `TDInPoint_nodeid(...)` and `TDInPoint_segmentmid(...)`.
 
 **Status:** permanent runtime invariant.
+
+## D011 — Scene discovery is separated from TouchDesigner integration
+
+Repeated scene iteration directly inside the TouchDesigner runtime made visual design, audio logic, transitions, renderer debugging and physical output concerns interfere with each other. Weak individual scenes were difficult to diagnose because they were immediately mixed into the generative runtime.
+
+The project now has a standalone `scene-lab/` workflow.
+
+Scene Lab is the place where scenes are:
+
+- authored independently against the canonical semantic tunnel model;
+- played and scrubbed individually;
+- tested under simulated calm / rhythmic / energetic music contexts;
+- tested for transitions scene A -> scene B;
+- reviewed with written critique and 1-5 diagnostic ratings;
+- versioned and revised independently;
+- explicitly accepted or rejected by the user.
+
+A scene is not ported into TouchDesigner until its standalone status is `VALIDATED`.
+
+The preferred first standalone renderer is lightweight WebGL2 / pure GLSL, but scene definitions and review data remain engine-neutral so Godot or another runner can replace it without rewriting the semantic scene specification.
+
+Standalone implementation work should happen on a feature branch/PR. The Scene Lab specification, semantic contract and review workflow are accepted foundations on `main`.
+
+**Status:** permanent development workflow.
