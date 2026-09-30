@@ -6,28 +6,116 @@
 - Structural source: `endGrid`
 - Grid: 9 columns x 5 rows = 45 structural intersections.
 - Real graph: 76 segments / 152 segment endpoints.
-- Dense visual population is created after `endGrid` by line division; structural intersections are not the LED count.
+- Dense visual population is created after semantic edge mapping by line division; structural intersections are not the LED count.
 - Camera orthographic width is 1.0.
+- `pixel_divide` remains 100 unless profiling proves a change is necessary.
+
+## Canonical semantic foundation
+
+The physical tunnel is now explicitly mapped before dense pixel subdivision. See `docs/ARCH_SEMANTICS.md`.
+
+Canonical chain:
+
+`in1 -> node_id -> ARCH_NODE_SEMANTICS -> edge_unique -> edge_attrs -> ARCH_EDGE_SEMANTICS -> edge_strips -> pixel_divide -> pixel_attrs`
+
+`ARCH_NODE_SEMANTICS` and `ARCH_EDGE_SEMANTICS` add metadata only. They do not change point positions or topology.
+
+### Node attributes
+
+- `archid` — 0..8
+- `traverseid` — 0..4 / T1..T5
+- `dmxxy` — exact Sender sample coordinate
+- `physicalm` — tunnel meters + unfolded arch meters
+- `logicaluv` — normalized logical grid position
+- `mirrorids` — longitudinal and left/right mirror node IDs
+- `noderegion` — left / ceiling / right
+
+### Edge attributes
+
+- `edgekind` — arch span vs traverse span
+- `archspan` — `(archid, spanid)`
+- `traversebay` — `(traverseid, bayid)`
+- `zones` — adjacent semantic zone IDs
+- `regionband` — broad region + band
+- `dmxedge` — exact Sender endpoints
+- `physedge` — physical endpoints in meters
+- `edgemetrics` — physical length / Sender span / known fixture point budgets
+- `fixturemap` — physical block + local fixture metadata
+
+Existing `nodeid`, `segmentid`, `segmentu`, `segmentmid`, `mirrorx`, `mirrory`, `mirrorrot` remain valid and must be preserved.
 
 ## Physical arch interpretation
 
-The flattened canvas represents a 3D arch unfolded into a 2D graph:
+The flattened canvas represents the 3D tunnel unfolded into a 2D graph.
 
-- the **central band/area** is the ceiling; it is not a single line;
-- the upper flattened area represents one physical side of the arch;
-- the lower flattened area represents the opposite physical side;
-- ceiling, left side and right side are artistic regions that may run independently or participate in cross-arch grammars;
-- region membership must be derived from the real `endGrid` topology/positions, not dense LED samples.
+Longitudinally:
 
-## Current accepted direction
+- 9 arches;
+- ideal positions every 1.5 m from 0 to 12 m;
+- exact Sender X samples: `0, 89, 179, 269, 359, 450, 539, 629, 719`.
 
-V8.5/V8.6 is the first base the user explicitly described as substantially better. Keep its separation:
+Across one U-shaped arch:
 
-- **mobile layer** = autonomous moving heads on real graph edges;
-- **structure layer** = traced cells, rectangles, portals and paths;
-- **music brain** = long-form organization, full-spectrum analysis and musical events.
+- left upright: 2.21733 m;
+- ceiling: 2.465 m;
+- right upright: 2.21733 m;
+- total unfolded length: 6.89966 m;
+- full physical arch: 414 points = 133 + 148 + 133;
+- ceiling semantic split: 74 + 74 points.
 
-The permanent registry of desired capabilities is `docs/GENERATIVE_SYSTEMS.md`. Future versions must preserve that library even when only a subset is active in one phase.
+Traverse levels:
+
+- T1 = Sender Y 1 / 0.00000 m;
+- T2 = Sender Y 134 / 2.21733 m;
+- T3 = Sender Y 208 / 3.44983 m;
+- T4 = Sender Y 281 / 4.68233 m;
+- T5 = Sender Y 414 / 6.89966 m.
+
+The four cross bands are:
+
+1. `LEFT_UPRIGHT`
+2. `CEILING_LEFT`
+3. `CEILING_RIGHT`
+4. `RIGHT_UPRIGHT`
+
+The ceiling is therefore a true area made of two bands, never one center line.
+
+## Semantic zones
+
+Nine arches produce eight longitudinal bays. Five traverse levels produce four bands.
+
+`8 bays x 4 bands = 32 semantic zones`
+
+Canonical formula:
+
+`zoneid = bayid * 4 + bandid`
+
+Future scene code should select zones and their boundary edges rather than reconstructing rectangles from screen coordinates.
+
+## Physical traverse mapping
+
+The downstream Art-Net mapping groups traverses into four 3 m blocks. Each complete 3 m traverse line uses 179 points.
+
+Do not invent a per-bay LED count when the physical mapping does not explicitly provide it. Use exact Sender coordinates, physical lengths and `segmentu` for spatial precision.
+
+## Mandatory GLSL reference wiring
+
+The semantic edge stream is a topology/reference input to advanced GLSL POPs:
+
+- `ARCH_EDGE_SEMANTICS -> agent_glsl input 2`
+- `ARCH_EDGE_SEMANTICS -> pixel_render_glsl input 3`
+
+This wiring is required for topology attribute access such as `TDInPoint_nodeid`, `TDInPoint_segmentmid` and mirror lookups.
+
+## Current development direction
+
+The previous scene-first method produced weak spatial control and repeated patch regressions. The new rule is:
+
+1. finish and validate semantic mapping first;
+2. author scenes against semantic arches/traverses/zones;
+3. do not add new scene complexity until the map is clean and trusted.
+
+The music brain and existing renderer remain useful, but new scene work must be based on the semantic architecture rather than hand-coded coordinate guessing.
 
 ## Non-regression rule
 
@@ -35,44 +123,21 @@ Do not improve one mode by deleting other accepted possibilities.
 
 New versions should preserve the capability library and change the conductor/scheduler that decides when a capability is visible. If a capability must be removed, document the decision first.
 
-## Current problems to solve
+## Visual invariants
 
-1. Structural frames/rectangles can still be too synchronized with each other, creating block-like motion.
-2. Frames need independent phase offsets, speeds, directions, edge order, trail and fade behavior.
-3. Mobile heads must stay autonomous and musically responsive, never default to packets/flocks.
-4. Long-lived solo pixels should sometimes cross a large part of the arch.
-5. Strict symmetry must be global when active; no unrelated asymmetric overlay may remain.
-6. Slow lightning/pathway must visibly traverse real graph corners over multiple beats/bars.
-7. Portal Relay must be implemented as a state machine: Portal A -> pathway -> Portal B -> delayed fade of A.
-8. Ceiling is a central area supporting cells/rectangles/corners/intersections, not one chaser line.
-9. Left/right sides need their own grammars plus call-and-response/cross-arch behavior.
-10. Music analysis should continue toward adaptive full-spectrum novelty, subtle peak detection, BPM/bar/phrase context and per-agent spectral affinity.
-11. The tunnel should rarely be nearly black while music is present; blackout should be an intentional rare grammar.
-12. Diversity should be phase-based and combinatorial so exact-looking animations do not recur too quickly.
+- fixed geometry; light/state moves;
+- mobile heads autonomous, not synchronized packets;
+- no mid-edge direction reversal;
+- strict symmetry mirrors every visible contribution;
+- deliberate asymmetric full-arch routes remain possible;
+- ceiling / left / right / full-arch regions all participate over time;
+- the tunnel should rarely be nearly black while music is present;
+- audio may organize choreography but must not become global brightness pumping;
+- maximum three coherent semantic colors at once.
 
-## Current user-facing controls
+## Performance target
 
-Keep the front panel small. Useful controls should remain approximately:
-
-- music reactivity
-- mobile pixels min/max
-- movement
-- interaction
-- geometry
-- complexity
-- evolution length
-- trail
-- contrast / darkness
-- ceiling amount
-- allow Y symmetry
-- palette
-
-Complexity belongs behind these controls. Internal systems should expose many parameters to the conductor, not to the user.
-
-## Palette rule
-
-Maximum three colors simultaneously. Prefer restrained coherent palettes such as ice/steel/teal or ivory/copper/desaturated teal. Color is semantic, not decorative rainbow drift.
-
-## Video review memory — 2026-09-30
-
-A 56-second recording showed that the current base is more coherent, but several frames still share timing and recur in similar regions. Mobile points are present but visually weaker than the structural layer, and dark intervals remain too frequent. See `docs/reviews/2026-09-30_074821_VIDEO_REVIEW.md`.
+- target: 30 FPS;
+- frame budget: 33.3 ms;
+- optimize actual cook cost before reducing physical/dense mapping quality;
+- do not reduce `pixel_divide` or render resolution as the first response to performance problems.
