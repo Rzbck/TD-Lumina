@@ -11,9 +11,33 @@ void main() {
   float r2 = dot(p, p);
   if (r2 > 1.0) discard;
   float core = smoothstep(1.0, 0.05, r2);
-  float halo = smoothstep(1.0, 0.22, r2) * 0.38;
+  float halo = smoothstep(1.0, 0.22, r2) * 0.34;
   float a = clamp((core + halo) * vIntensity, 0.0, 1.0);
-  outColor = vec4(vColor * (0.74 + a * 0.7), a);
+  outColor = vec4(vColor * (0.76 + a * 0.66), a);
+}`;
+
+const PROJECTION_GLSL = `
+vec2 projectPoint(vec2 flatPos, vec3 worldPos) {
+  // 0 = Sender/semantic map. Useful for IDs, not for metric pitch inspection.
+  if (uViewMode < 0.5) {
+    return vec2((flatPos.x * 2.0 - 1.0) * 0.93, (1.0 - flatPos.y * 2.0) * 0.88);
+  }
+
+  // 2 = metric unfolded view. Same number of SCREEN pixels per physical meter on X and Y.
+  // flat.x represents 0..12 m depth; flat.y represents 0..6.89966 m unfolded U path.
+  if (uViewMode > 1.5) {
+    float aspectFix = uResolution.y / max(uResolution.x, 1.0);
+    float depthM = flatPos.x * 12.0;
+    float crossM = flatPos.y * 6.89966;
+    float meterScale = 0.145;
+    return vec2((depthM - 6.0) * meterScale * aspectFix, (3.44983 - crossM) * meterScale);
+  }
+
+  // 1 = inspection perspective. Perspective intentionally changes apparent LED spacing with depth.
+  float depth = 1.0 + worldPos.z * 0.055;
+  float x = (worldPos.x / depth) * 0.86;
+  float y = ((worldPos.y - 1.10) / depth) * 0.93 - 0.015;
+  return vec2(x, y);
 }`;
 
 const AGENT_VERTEX = `#version 300 es
@@ -29,19 +53,11 @@ uniform vec3 uColorMotion;
 uniform vec3 uColorAccent;
 out vec3 vColor;
 out float vIntensity;
-vec2 projectPoint(vec2 flatPos, vec3 worldPos) {
-  if (uViewMode < 0.5) {
-    return vec2((flatPos.x * 2.0 - 1.0) * 0.93, (1.0 - flatPos.y * 2.0) * 0.88);
-  }
-  float depth = 1.0 + worldPos.z * 0.10;
-  float x = (worldPos.x / depth) * 0.72;
-  float y = ((worldPos.y - 1.08) / depth) * 0.80 - 0.02;
-  return vec2(x, y);
-}
+${PROJECTION_GLSL}
 void main() {
   vec2 clip = projectPoint(aFlat, aWorld);
   gl_Position = vec4(clip, 0.0, 1.0);
-  gl_PointSize = max(1.0, aSize * (uViewMode < 0.5 ? 1.0 : 0.92));
+  gl_PointSize = max(1.0, aSize * (uViewMode > 1.5 ? 1.05 : 0.94));
   vColor = aColorRole > 1.5 ? uColorAccent : uColorMotion;
   vIntensity = aIntensity;
 }`;
@@ -85,21 +101,13 @@ float pulseFract(float phase, float width) {
   float d = min(phase, 1.0 - phase);
   return 1.0 - smoothstep(width * 0.25, width, d);
 }
-vec2 projectPoint(vec2 flatPos, vec3 worldPos) {
-  if (uViewMode < 0.5) {
-    return vec2((flatPos.x * 2.0 - 1.0) * 0.93, (1.0 - flatPos.y * 2.0) * 0.88);
-  }
-  float depth = 1.0 + worldPos.z * 0.10;
-  float x = (worldPos.x / depth) * 0.72;
-  float y = ((worldPos.y - 1.08) / depth) * 0.80 - 0.02;
-  return vec2(x, y);
-}
+${PROJECTION_GLSL}
 ${sceneLogic}
 void main() {
   SceneResult result = sceneEval();
   vec2 clip = projectPoint(aFlat, aWorld);
   gl_Position = vec4(clip, 0.0, 1.0);
-  gl_PointSize = max(1.0, result.size * (uViewMode < 0.5 ? 1.0 : 0.90));
+  gl_PointSize = max(1.0, result.size * (uViewMode > 1.5 ? 1.05 : 0.92));
   vColor = result.color;
   vIntensity = result.intensity;
 }`;
@@ -196,7 +204,7 @@ export class SceneEngine {
 
     this.scenes = scenes;
     this.graph = buildSemanticGraph();
-    this.samples = buildDenseSamples(this.graph, 52);
+    this.samples = buildDenseSamples(this.graph);
     this.agentSystem = new AgentSystem(this.graph);
     this.programs = new Map();
     this.scene = scenes[0];
@@ -207,7 +215,6 @@ export class SceneEngine {
     this.timeSeconds = 0;
     this.playing = true;
     this.lastNow = performance.now();
-    this.lastDiagnostics = null;
     this.lastAgentDiagnostics = [];
     this.frameMs = 0;
     this.fps = 0;
@@ -216,8 +223,10 @@ export class SceneEngine {
     this._history = [];
     this._lastHistoryTime = -Infinity;
 
-    this._initStaticBuffer();
-    this._initAgentBuffer();
+    this.staticBuffer = this.gl.createBuffer();
+    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.staticBuffer);
+    this.gl.bufferData(this.gl.ARRAY_BUFFER, this.samples.data, this.gl.STATIC_DRAW);
+    this.agentBuffer = this.gl.createBuffer();
     this._agentProgram = createProgram(this.gl, AGENT_VERTEX, COMMON_FRAGMENT);
     this.setScene(this.scene);
 
@@ -225,18 +234,6 @@ export class SceneEngine {
     this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE);
     this.gl.disable(this.gl.DEPTH_TEST);
     this.resize();
-  }
-
-  _initStaticBuffer() {
-    const gl = this.gl;
-    this.staticBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.staticBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, this.samples.data, gl.STATIC_DRAW);
-  }
-
-  _initAgentBuffer() {
-    this.agentBuffer = this.gl.createBuffer();
-    this.agentCapacity = 0;
   }
 
   _sceneProgram(scene) {
@@ -253,18 +250,9 @@ export class SceneEngine {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.staticBuffer);
     const stride = this.samples.stride * 4;
     const specs = [
-      ['aFlat', 2, 0],
-      ['aWorld', 3, 2],
-      ['aArchId', 1, 5],
-      ['aTraverseId', 1, 6],
-      ['aEdgeKind', 1, 7],
-      ['aBandId', 1, 8],
-      ['aZoneA', 1, 9],
-      ['aZoneB', 1, 10],
-      ['aSegmentU', 1, 11],
-      ['aEdgeId', 1, 12],
-      ['aBayId', 1, 13],
-      ['aRegionId', 1, 14],
+      ['aFlat', 2, 0], ['aWorld', 3, 2], ['aArchId', 1, 5], ['aTraverseId', 1, 6],
+      ['aEdgeKind', 1, 7], ['aBandId', 1, 8], ['aZoneA', 1, 9], ['aZoneB', 1, 10],
+      ['aSegmentU', 1, 11], ['aEdgeId', 1, 12], ['aBayId', 1, 13], ['aRegionId', 1, 14],
     ];
     for (const [name, size, offset] of specs) {
       const loc = gl.getAttribLocation(program, name);
@@ -288,16 +276,16 @@ export class SceneEngine {
     };
     for (const [name, value] of Object.entries(uniforms)) {
       const loc = gl.getUniformLocation(program, name);
-      if (loc) gl.uniform1f(loc, value);
+      if (loc !== null) gl.uniform1f(loc, value);
     }
     const resLoc = gl.getUniformLocation(program, 'uResolution');
-    if (resLoc) gl.uniform2f(resLoc, this.canvas.width, this.canvas.height);
+    if (resLoc !== null) gl.uniform2f(resLoc, this.canvas.width, this.canvas.height);
     const p0 = gl.getUniformLocation(program, 'uColorPrimary');
     const p1 = gl.getUniformLocation(program, 'uColorMotion');
     const p2 = gl.getUniformLocation(program, 'uColorAccent');
-    if (p0) setVec3(gl, p0, palette.primary);
-    if (p1) setVec3(gl, p1, palette.motion);
-    if (p2) setVec3(gl, p2, palette.accent);
+    if (p0 !== null) setVec3(gl, p0, palette.primary);
+    if (p1 !== null) setVec3(gl, p1, palette.motion);
+    if (p2 !== null) setVec3(gl, p2, palette.accent);
   }
 
   _renderAgents(palette) {
@@ -312,25 +300,16 @@ export class SceneEngine {
     const data = new Float32Array(sample.points.length * stride);
     let k = 0;
     for (const p of sample.points) {
-      data[k++] = p.flat[0];
-      data[k++] = p.flat[1];
-      data[k++] = p.world[0];
-      data[k++] = p.world[1];
-      data[k++] = p.world[2];
-      data[k++] = p.intensity;
-      data[k++] = p.size;
-      data[k++] = p.colorRole;
-      data[k++] = p.agentId;
+      data[k++] = p.flat[0]; data[k++] = p.flat[1];
+      data[k++] = p.world[0]; data[k++] = p.world[1]; data[k++] = p.world[2];
+      data[k++] = p.intensity; data[k++] = p.size; data[k++] = p.colorRole; data[k++] = p.agentId;
     }
 
     gl.useProgram(this._agentProgram);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.agentBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
     const byteStride = stride * 4;
-    const specs = [
-      ['aFlat', 2, 0], ['aWorld', 3, 2], ['aIntensity', 1, 5], ['aSize', 1, 6], ['aColorRole', 1, 7],
-    ];
-    for (const [name, size, offset] of specs) {
+    for (const [name, size, offset] of [['aFlat',2,0],['aWorld',3,2],['aIntensity',1,5],['aSize',1,6],['aColorRole',1,7]]) {
       const loc = gl.getAttribLocation(this._agentProgram, name);
       if (loc < 0) continue;
       gl.enableVertexAttribArray(loc);
@@ -340,10 +319,10 @@ export class SceneEngine {
     const resLoc = gl.getUniformLocation(this._agentProgram, 'uResolution');
     const mLoc = gl.getUniformLocation(this._agentProgram, 'uColorMotion');
     const aLoc = gl.getUniformLocation(this._agentProgram, 'uColorAccent');
-    if (viewLoc) gl.uniform1f(viewLoc, this.viewMode);
-    if (resLoc) gl.uniform2f(resLoc, this.canvas.width, this.canvas.height);
-    if (mLoc) setVec3(gl, mLoc, palette.motion);
-    if (aLoc) setVec3(gl, aLoc, palette.accent);
+    if (viewLoc !== null) gl.uniform1f(viewLoc, this.viewMode);
+    if (resLoc !== null) gl.uniform2f(resLoc, this.canvas.width, this.canvas.height);
+    if (mLoc !== null) setVec3(gl, mLoc, palette.motion);
+    if (aLoc !== null) setVec3(gl, aLoc, palette.accent);
     gl.drawArrays(gl.POINTS, 0, sample.points.length);
   }
 
@@ -358,17 +337,9 @@ export class SceneEngine {
     this.agentSystem.reset(this.seed);
   }
 
-  setBpm(bpm) {
-    this.bpm = Math.max(1, Number(bpm) || 120);
-  }
-
-  setMusicContext(context) {
-    this.musicContext = context;
-  }
-
-  setViewMode(mode) {
-    this.viewMode = Number(mode) ? 1 : 0;
-  }
+  setBpm(bpm) { this.bpm = Math.max(1, Number(bpm) || 120); }
+  setMusicContext(context) { this.musicContext = context; }
+  setViewMode(mode) { this.viewMode = Math.max(0, Math.min(2, Number(mode) || 0)); }
 
   seek(seconds) {
     this.timeSeconds = Math.max(0, Number(seconds) || 0);
@@ -383,15 +354,7 @@ export class SceneEngine {
     this.lastNow = performance.now();
   }
 
-  pause() {
-    if (!this.playing) return;
-    this.playing = false;
-  }
-
-  toggle() {
-    if (this.playing) this.pause(); else this.play();
-    return this.playing;
-  }
+  pause() { this.playing = false; }
 
   resize() {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -407,8 +370,7 @@ export class SceneEngine {
   _sampleHistory() {
     if (this.timeSeconds - this._lastHistoryTime < 0.25) return;
     this._lastHistoryTime = this.timeSeconds;
-    const diag = this.diagnostics(false);
-    this._history.push(diag);
+    this._history.push(this.diagnostics(false));
     const minTime = this.timeSeconds - 8.0;
     while (this._history.length && this._history[0].time_seconds < minTime) this._history.shift();
   }
@@ -442,19 +404,20 @@ export class SceneEngine {
       this._fpsStarted = now;
     }
     this._sampleHistory();
-    this.lastDiagnostics = this.diagnostics(false);
-    return this.lastDiagnostics;
+    return this.diagnostics(false);
   }
 
   diagnostics(includeAgents = true) {
     const beat = this.timeSeconds * this.bpm / 60;
     const bundle = this._sceneProgram(this.scene);
     const palette = paletteAt(this.timeSeconds, this.seed);
+    const viewNames = ['sender_semantic', 'tunnel_perspective', 'metric_unfolded_1to1'];
     return {
       scene_id: this.scene.id,
       scene_slug: this.scene.slug,
       scene_title: this.scene.title,
       scene_version: this.scene.version,
+      scene_family: this.scene.family || null,
       shader_label: this.scene.shaderLabel,
       shader_signature: bundle.signature,
       seed: Number(this.seed),
@@ -467,7 +430,7 @@ export class SceneEngine {
       beat_phase: Number((beat - Math.floor(beat)).toFixed(6)),
       bar_index: Math.floor(beat / 4),
       phrase_16beat_index: Math.floor(beat / 16),
-      view_mode: this.viewMode === 0 ? 'semantic_flat' : 'tunnel_perspective',
+      view_mode: viewNames[this.viewMode] || viewNames[0],
       playing: this.playing,
       fps: Number(this.fps.toFixed(2)),
       frame_ms: Number(this.frameMs.toFixed(3)),
@@ -475,7 +438,9 @@ export class SceneEngine {
       graph: {
         nodes: this.graph.nodes.length,
         edges: this.graph.edges.length,
-        dense_samples: this.samples.count,
+        physical_pixels: this.samples.count,
+        arch_pixels: this.samples.physical?.arch_pixels,
+        traverse_pixels: this.samples.physical?.traverse_pixels,
       },
       agents: includeAgents ? this.lastAgentDiagnostics : undefined,
     };
