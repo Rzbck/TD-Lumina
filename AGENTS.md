@@ -4,18 +4,18 @@ Read these files before modifying code:
 
 1. `docs/PROJECT_MEMORY.md`
 2. `docs/ARCH_SEMANTICS.md`
-3. `docs/GENERATIVE_SYSTEMS.md`
-4. `docs/LUMINA_V3_EFFECT_LIBRARY.md`
-5. `docs/COLOR_ENGINE.md`
-6. `docs/VISUAL_LANGUAGE.md`
-7. `docs/ARCHITECTURE.md`
-8. `docs/DECISIONS.md`
-9. `docs/TEST_PROTOCOL.md`
-10. latest relevant file in `docs/reviews/`
-
-## Scope
-
-This repository is for TouchDesigner runtime work, Python, GLSL, semantic graph logic, patches, documentation, validation and review. Do not create or maintain a separate web application / Scene Lab workflow here.
+3. `scene-lab/README.md`
+4. `scene-lab/SCENE_CONTRACT.md`
+5. `scene-lab/REVIEW_WORKFLOW.md`
+6. `scene-lab/scene-registry.json`
+7. `docs/GENERATIVE_SYSTEMS.md`
+8. `docs/LUMINA_V3_EFFECT_LIBRARY.md`
+9. `docs/COLOR_ENGINE.md`
+10. `docs/VISUAL_LANGUAGE.md`
+11. `docs/ARCHITECTURE.md`
+12. `docs/DECISIONS.md`
+13. `docs/TEST_PROTOCOL.md`
+14. latest relevant file in `docs/reviews/` and `scene-lab/reviews/`
 
 ## Non-negotiable topology
 
@@ -106,11 +106,28 @@ Important values:
 
 Never invent an unknown per-bay LED count. Use semantic IDs plus physical/Sender coordinates.
 
-## Runtime development rule
+## Scene Lab development rule
 
-All visual development targets the real TouchDesigner engine. Work scene-by-scene or system-by-system, but keep the implementation in Python/GLSL/TouchDesigner patch form. Do not introduce a separate web preview application as a substitute for the runtime.
+Scene discovery and visual iteration now happen in `scene-lab/` before TouchDesigner integration.
 
-Before modifying runtime code, read the current visual rules and latest review. New behavior must preserve accepted capabilities unless an explicit decision removes them.
+The standalone lab must use the same semantic architecture as TouchDesigner, but it must not modify the TouchDesigner runtime while scenes are still being discovered.
+
+Every scene is independently selectable, versioned and reviewed. A scene is ported back into TouchDesigner only after the user explicitly validates it in the standalone lab.
+
+Every standalone scene must follow `scene-lab/SCENE_CONTRACT.md` and contain:
+
+- FOUNDATION — enough architectural light to reveal the tunnel;
+- MOTION — meaningful travel/growth/wave/relay/living-pixel behavior;
+- ACCENT — sparse punctuation, not permanent white dominance;
+- explicit symmetry policy;
+- internal evolution;
+- authored entrance and exit;
+- clear music/timing role;
+- no accidental long near-black state while active music is present.
+
+Do not hide a weak scene by layering generic effects on top. Improve the scene itself.
+
+Standalone reviews are append-only and follow `scene-lab/review-schema.json`. Do not mark a scene `VALIDATED` without explicit user acceptance.
 
 ## Capability non-regression
 
@@ -133,26 +150,22 @@ If a capability is intentionally removed, record the reason in `docs/DECISIONS.m
 - Maximum three semantic source colors at once.
 - The tunnel should rarely become almost completely black while music is present.
 - Global audio level may gate silence but must not become a global brightness pump.
-- Audio must never directly modulate global brightness, whole-scene opacity or a scene-wide gain envelope during active playback.
-- No visible random flashing. Fast accents must be sparse, authored and spatially localized.
-- No forward/backward jitter. A mobile head owns a direction until it reaches a semantic graph junction or completes its route.
-- Do not make every movement hard-quantized to beat steps. Musical timing may organize phrases while actual travel uses continuous interpolation and independent phase offsets.
 
 ## Audio invariants
 
 Use full-spectrum novelty and adaptive baselines. Do not reduce music response to only low/mid/high RMS. Low/mid/high can describe broad musical roles, but subtle spectral peaks, flux, centroid, transient density, BPM/bar/phrase context, and local per-agent spectral novelty must contribute to variation.
 
-Audio should influence choreography through route selection, spawn timing, density, speed family, phrase transitions, object lifetime, structural construction choices and sparse accents. It should not create brightness pumping or unstable frame-to-frame direction changes.
-
 ## Versioning
 
 - Stable accepted foundations live on `main`.
 - Experimental visual changes go on a feature branch and PR.
+- Standalone Scene Lab implementation work should use a feature branch/PR; the Scene Lab specification itself is an accepted foundation on `main`.
 - Keep complete TouchDesigner injection patches in `patches/` once runtime-tested.
 - Keep corresponding GLSL/Python source snapshots in `src/` when runtime shader or brain logic changes.
 - Update `docs/PROJECT_MEMORY.md`, `docs/ARCH_SEMANTICS.md` and `docs/DECISIONS.md` when architecture changes.
 - Record explicit user likes/dislikes in `docs/VISUAL_LANGUAGE.md`.
 - Add a dated `docs/reviews/` note when a user video materially changes the diagnosis.
+- Add standalone scene reviews under `scene-lab/reviews/` without overwriting previous reviews.
 
 ## Validation
 
@@ -162,4 +175,11 @@ Do not call a runtime version complete until:
 - The semantic reference inputs are still connected at agent input 2 and pixel renderer input 3.
 - A visual version has been reviewed for repetition, darkness, symmetry purity, mobile-head autonomy, timing, junction behavior, music sensitivity and regional use.
 - The previous working shader/script is recoverable through backup or git history.
-- No blocking visual invariant is violated.
+
+Do not call a Scene Lab scene complete until:
+
+- it has been reviewed individually in multiple music contexts;
+- its written review has no blocking issues;
+- the user explicitly accepts it;
+- its registry status is changed to `VALIDATED`;
+- only then is TouchDesigner integration allowed.
