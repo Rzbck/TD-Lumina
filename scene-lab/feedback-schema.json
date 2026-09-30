@@ -4,31 +4,37 @@
   "type": "object",
   "required": ["schema_version", "kind", "feedback_id", "created_at", "reference_type", "comment", "snapshot"],
   "properties": {
-    "schema_version": {"const": 1},
+    "schema_version": {"const": 2},
     "kind": {"const": "feedback_event"},
     "feedback_id": {"type": "string"},
     "created_at": {"type": "string"},
-    "reference_type": {
-      "type": "string",
-      "enum": ["instant", "just_seen", "desired"]
+    "reference_type": {"type": "string", "enum": ["instant", "just_seen", "desired"]},
+    "comment": {"type": "string"},
+    "ratings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "architecture_readability": {"type": ["integer", "null"], "minimum": 1, "maximum": 5},
+        "physical_pixel_fidelity": {"type": ["integer", "null"], "minimum": 1, "maximum": 5},
+        "light_shadow_balance": {"type": ["integer", "null"], "minimum": 1, "maximum": 5},
+        "movement_quality": {"type": ["integer", "null"], "minimum": 1, "maximum": 5},
+        "movement_continuity": {"type": ["integer", "null"], "minimum": 1, "maximum": 5},
+        "internal_evolution": {"type": ["integer", "null"], "minimum": 1, "maximum": 5},
+        "spatial_use": {"type": ["integer", "null"], "minimum": 1, "maximum": 5},
+        "symmetry_quality": {"type": ["integer", "null"], "minimum": 1, "maximum": 5},
+        "asymmetry_quality": {"type": ["integer", "null"], "minimum": 1, "maximum": 5},
+        "pixel_liveliness": {"type": ["integer", "null"], "minimum": 1, "maximum": 5},
+        "music_sync": {"type": ["integer", "null"], "minimum": 1, "maximum": 5},
+        "color_palette": {"type": ["integer", "null"], "minimum": 1, "maximum": 5},
+        "originality": {"type": ["integer", "null"], "minimum": 1, "maximum": 5},
+        "repetition_control": {"type": ["integer", "null"], "minimum": 1, "maximum": 5},
+        "transition_quality": {"type": ["integer", "null"], "minimum": 1, "maximum": 5},
+        "performance": {"type": ["integer", "null"], "minimum": 1, "maximum": 5}
+      }
     },
-    "comment": {"type": "string", "minLength": 1},
     "snapshot": {
       "type": "object",
       "required": ["scene_id", "scene_slug", "scene_version", "shader_signature", "seed", "bpm", "music_context", "time_seconds", "beat"],
-      "properties": {
-        "scene_id": {"type": "integer"},
-        "scene_slug": {"type": "string"},
-        "scene_version": {"type": "string"},
-        "shader_signature": {"type": "string"},
-        "seed": {"type": "number"},
-        "bpm": {"type": "number"},
-        "music_context": {"type": "string"},
-        "time_seconds": {"type": "number"},
-        "beat": {"type": "number"},
-        "state_history": {"type": "array"},
-        "agents": {"type": "array"}
-      },
       "additionalProperties": true
     },
     "pause_capture": {"type": ["string", "null"]},
