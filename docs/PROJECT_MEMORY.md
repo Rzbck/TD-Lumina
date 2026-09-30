@@ -109,13 +109,73 @@ This wiring is required for topology attribute access such as `TDInPoint_nodeid`
 
 ## Current development direction
 
-The previous scene-first method produced weak spatial control and repeated patch regressions. The new rule is:
+The semantic mapping is now the trusted foundation. Scene discovery is being moved out of TouchDesigner into a standalone Scene Lab before final runtime integration.
 
-1. finish and validate semantic mapping first;
-2. author scenes against semantic arches/traverses/zones;
-3. do not add new scene complexity until the map is clean and trusted.
+Canonical Scene Lab location:
 
-The music brain and existing renderer remain useful, but new scene work must be based on the semantic architecture rather than hand-coded coordinate guessing.
+`scene-lab/`
+
+The standalone lab must reproduce the exact semantic tunnel model, but it must not modify the TouchDesigner runtime while scene language is still being discovered.
+
+Every scene is treated independently and must be:
+
+1. selectable and runnable alone;
+2. versioned independently;
+3. tested under several musical contexts;
+4. reviewed with written critique and diagnostic ratings;
+5. revised without requiring unrelated scenes to change;
+6. explicitly marked `VALIDATED` by the user before TouchDesigner integration.
+
+The preferred first runner is lightweight WebGL2 / pure GLSL. The scene specification and review data remain engine-neutral so Godot or another runner may be substituted later.
+
+See:
+
+- `scene-lab/README.md`
+- `scene-lab/SCENE_CONTRACT.md`
+- `scene-lab/REVIEW_WORKFLOW.md`
+- `scene-lab/scene-registry.json`
+- `scene-lab/NEXT_AI_PROMPT.md`
+
+### Scene design contract
+
+Every standalone scene owns three layers:
+
+- **FOUNDATION** — enough architectural light to keep the tunnel readable;
+- **MOTION** — meaningful travel, wave, migration, growth, relay or living pixels;
+- **ACCENT** — sparse punctuation/arrival/closure.
+
+Scenes must visibly evolve internally instead of remaining effectively unchanged for long stretches.
+
+Symmetry must be explicit: `STRICT`, `OFF` or an authored `RELEASE` from strict symmetry into deliberate asymmetry.
+
+Living pixels must vary length, speed, phase and route. They may share BPM/phrase timing but should not read as one synchronized packet.
+
+Audio controls choreography and timing, not global brightness pumping.
+
+### Integration gate
+
+Only standalone scenes with status `VALIDATED` should be ported back into TouchDesigner.
+
+After integration, compare the TD result against the standalone reference before marking it `TD_INTEGRATED`.
+
+## Initial Scene Lab prototype set
+
+The current standalone registry starts with 12 unvalidated prototypes:
+
+1. Tunnel Ribs
+2. Ceiling River
+3. Left Ceiling Right
+4. Parallel Chambers
+5. Arch March
+6. Traverse Wave
+7. Mirror Cathedral
+8. Symmetry Release Journey
+9. Zone Relay
+10. Shadow Light Alternation
+11. Living Pixel Species
+12. Sonic Weave
+
+These names do not imply acceptance. They are starting points for scene-by-scene review.
 
 ## Non-regression rule
 
