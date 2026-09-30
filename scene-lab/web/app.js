@@ -1,9 +1,11 @@
 import { SceneEngine } from './engine.js';
 import { scenes } from './scenes/index.js';
+import { initRatingMatrix, collectRatings, clearRatings, initLocalMicrophone } from './review-tools.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('sceneCanvas');
 const sceneSelect = $('sceneSelect');
+const sceneSearch = $('sceneSearch');
 const playPause = $('playPause');
 const restart = $('restart');
 const timeline = $('timeline');
@@ -25,15 +27,13 @@ const saveStatus = $('saveStatus');
 const snapshotPreview = $('snapshotPreview');
 const micButton = $('micButton');
 const micStatus = $('micStatus');
+const ratingMatrix = $('ratingMatrix');
 const fatalError = $('fatalError');
 
 let engine;
 let pauseState = null;
 let recentFrames = [];
 let lastThumbAt = -Infinity;
-let recognition = null;
-let micRecording = false;
-let micBaseText = '';
 
 function isTypingTarget(target) {
   return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || target?.isContentEditable;
@@ -43,6 +43,7 @@ function compactSnapshot(snapshot) {
   return JSON.stringify({
     scene: snapshot.scene_slug,
     version: snapshot.scene_version,
+    family: snapshot.scene_family,
     shader: snapshot.shader_signature,
     seed: snapshot.seed,
     bpm: snapshot.bpm,
@@ -51,17 +52,14 @@ function compactSnapshot(snapshot) {
     beat: snapshot.beat,
     beat_phase: snapshot.beat_phase,
     view: snapshot.view_mode,
+    physical_pixels: snapshot.graph?.physical_pixels,
     agents: snapshot.agents?.length ?? 0,
     history_samples: snapshot.state_history?.length ?? 0,
   }, null, 2);
 }
 
 function capturePng() {
-  try {
-    return canvas.toDataURL('image/png');
-  } catch {
-    return null;
-  }
+  try { return canvas.toDataURL('image/png'); } catch { return null; }
 }
 
 function captureThumb(diag) {
@@ -140,25 +138,56 @@ function togglePlay() {
   if (engine.playing) pauseExact(); else resume();
 }
 
-function setScene(scene) {
+function setScene(scene, clearReview = true) {
   engine.setScene(scene);
   clearPauseState();
   recentFrames = [];
   lastThumbAt = -Infinity;
   shaderChip.textContent = scene.shaderLabel;
-  sceneMeta.textContent = `${scene.title} · v${scene.version} · ID ${scene.id}`;
+  sceneMeta.textContent = `#${String(scene.id).padStart(2, '0')} · ${scene.title} · ${scene.family || 'custom'} · v${scene.version}`;
+  if (clearReview) {
+    clearRatings(ratingMatrix);
+    saveStatus.textContent = '';
+  }
+}
+
+function renderSceneOptions(filter = '') {
+  const query = filter.trim().toLowerCase();
+  const activeSlug = engine?.scene?.slug || scenes[0].slug;
+  const matches = scenes.filter((scene) => {
+    if (!query) return true;
+    return String(scene.id) === query || scene.title.toLowerCase().includes(query) || scene.slug.includes(query) || (scene.family || '').includes(query);
+  });
+
+  sceneSelect.innerHTML = '';
+  for (const scene of matches) {
+    const option = document.createElement('option');
+    option.value = scene.slug;
+    option.textContent = `${String(scene.id).padStart(2, '0')} · ${scene.title}  [${scene.family || 'custom'}]`;
+    option.selected = scene.slug === activeSlug;
+    sceneSelect.appendChild(option);
+  }
+
+  if (!matches.some((scene) => scene.slug === activeSlug) && matches[0]) {
+    sceneSelect.value = matches[0].slug;
+  }
 }
 
 function initSceneSelect() {
-  for (const scene of scenes) {
-    const option = document.createElement('option');
-    option.value = scene.slug;
-    option.textContent = `${scene.id}. ${scene.title}`;
-    sceneSelect.appendChild(option);
-  }
+  renderSceneOptions();
   sceneSelect.addEventListener('change', () => {
-    const scene = scenes.find((x) => x.slug === sceneSelect.value) || scenes[0];
-    setScene(scene);
+    const scene = scenes.find((x) => x.slug === sceneSelect.value);
+    if (scene) setScene(scene);
+  });
+  sceneSearch.addEventListener('input', () => renderSceneOptions(sceneSearch.value));
+  sceneSearch.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && sceneSelect.options.length) {
+      const scene = scenes.find((x) => x.slug === sceneSelect.options[0].value);
+      if (scene) {
+        sceneSelect.value = scene.slug;
+        setScene(scene);
+      }
+    }
   });
 }
 
@@ -168,20 +197,14 @@ function bindControls() {
     engine.seek(0);
     recentFrames = [];
     lastThumbAt = -Infinity;
-    if (!engine.playing) {
-      engine.render(performance.now());
-      capturePauseState();
-    }
+    if (!engine.playing) { engine.render(performance.now()); capturePauseState(); }
   });
 
   timeline.addEventListener('input', () => {
     engine.seek(Number(timeline.value));
     recentFrames = [];
     lastThumbAt = -Infinity;
-    if (!engine.playing) {
-      engine.render(performance.now());
-      capturePauseState();
-    }
+    if (!engine.playing) { engine.render(performance.now()); capturePauseState(); }
   });
 
   bpmInput.addEventListener('change', () => {
@@ -227,8 +250,9 @@ function bindControls() {
 
 async function postFeedback() {
   const comment = commentInput.value.trim();
-  if (!comment) {
-    saveStatus.textContent = 'Écris ou dicte un commentaire.';
+  const ratings = collectRatings(ratingMatrix);
+  if (!comment && Object.keys(ratings).length === 0) {
+    saveStatus.textContent = 'Ajoute au moins un commentaire ou une note.';
     return;
   }
 
@@ -247,15 +271,15 @@ async function postFeedback() {
     };
   }
 
-  const feedbackId = crypto.randomUUID();
   try {
     const response = await fetch('/api/feedback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        feedback_id: feedbackId,
+        feedback_id: crypto.randomUUID(),
         reference_type: referenceType.value,
-        comment,
+        comment: comment || 'Notation uniquement',
+        ratings,
         snapshot: packet.snapshot,
         pause_image: packet.pauseImage,
         context_frames: packet.contextFrames,
@@ -263,68 +287,14 @@ async function postFeedback() {
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.detail || 'Erreur serveur');
-    saveStatus.textContent = `Sauvé: ${result.event_path}`;
+    saveStatus.textContent = `Sauvé · ${result.rating_count} note(s) · ${result.event_path}`;
     commentInput.value = '';
+    clearRatings(ratingMatrix);
   } catch (error) {
-    saveStatus.textContent = `Erreur: ${error.message}`;
+    saveStatus.textContent = `Erreur : ${error.message}`;
   } finally {
     saveFeedback.disabled = false;
   }
-}
-
-function initMicrophone() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    micButton.disabled = true;
-    micStatus.textContent = 'Indisponible dans ce navigateur — ignoré.';
-    return;
-  }
-
-  recognition = new SpeechRecognition();
-  recognition.lang = 'fr-FR';
-  recognition.continuous = true;
-  recognition.interimResults = true;
-  recognition.maxAlternatives = 1;
-
-  recognition.onstart = () => {
-    micRecording = true;
-    micButton.textContent = 'Stop micro';
-    micStatus.textContent = 'Écoute FR… (expérimental)';
-    micBaseText = commentInput.value.trim();
-  };
-
-  recognition.onresult = (event) => {
-    let finalText = '';
-    let interimText = '';
-    for (let i = event.resultIndex; i < event.results.length; i += 1) {
-      const text = event.results[i][0]?.transcript || '';
-      if (event.results[i].isFinal) finalText += `${text} `;
-      else interimText += text;
-    }
-    if (finalText.trim()) {
-      micBaseText = [micBaseText, finalText.trim()].filter(Boolean).join(' ');
-    }
-    commentInput.value = [micBaseText, interimText.trim()].filter(Boolean).join(' ');
-  };
-
-  recognition.onerror = (event) => {
-    micStatus.textContent = `Micro: ${event.error}. Tu peux l’ignorer et taper.`;
-  };
-
-  recognition.onend = () => {
-    micRecording = false;
-    micButton.textContent = 'Micro FR';
-    if (!micStatus.textContent.startsWith('Micro:')) {
-      micStatus.textContent = 'Prêt — français fr-FR, expérimental.';
-    }
-  };
-
-  micButton.disabled = false;
-  micStatus.textContent = 'Prêt — français fr-FR, expérimental.';
-  micButton.addEventListener('click', () => {
-    if (micRecording) recognition.stop();
-    else recognition.start();
-  });
 }
 
 function animationLoop(now) {
@@ -342,13 +312,14 @@ function animationLoop(now) {
   }
 }
 
-async function start() {
+function start() {
   try {
     engine = new SceneEngine(canvas, scenes);
+    initRatingMatrix(ratingMatrix);
     initSceneSelect();
-    setScene(scenes[0]);
+    setScene(scenes[0], false);
     bindControls();
-    initMicrophone();
+    initLocalMicrophone({ button: micButton, status: micStatus, textarea: commentInput });
     saveFeedback.addEventListener('click', postFeedback);
     syncPlayUi();
     requestAnimationFrame(animationLoop);
