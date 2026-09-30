@@ -12,6 +12,27 @@ export const CROSS_M = [0.0, 2.21733, 3.44983, 4.68233, 6.89966];
 export const SENDER_X = [0, 89, 179, 269, 359, 450, 539, 629, 719];
 export const SENDER_Y = [1, 134, 208, 281, 414];
 
+// Exact physical fixture counts copied from /project1/ArtnetAll.
+// One arch is 133 left + 148 ceiling + 133 right = 414 LEDs.
+// Each 3 m traverse fixture block is 179 LEDs; there are 4 blocks x 5 traverses.
+export const ARCH_LED_LEFT = 133;
+export const ARCH_LED_CEILING = 148;
+export const ARCH_LED_RIGHT = 133;
+export const ARCH_LED_TOTAL = 414;
+export const TRAVERSE_LED_PER_BLOCK = 179;
+export const TRAVERSE_BLOCK_COUNT = 4;
+export const PHYSICAL_ARCH_LED_COUNT = ARCH_COUNT * ARCH_LED_TOTAL;
+export const PHYSICAL_TRAVERSE_LED_COUNT = TRAVERSE_COUNT * TRAVERSE_BLOCK_COUNT * TRAVERSE_LED_PER_BLOCK;
+export const PHYSICAL_LED_COUNT = PHYSICAL_ARCH_LED_COUNT + PHYSICAL_TRAVERSE_LED_COUNT;
+
+// Physical line geometry from ArtnetAll. The tiny offsets are deliberate in the TD fixture model.
+const ARCH_HALF_WIDTH_M = CEILING_WIDTH_M * 0.5;
+const ARCH_UPRIGHT_TOP_M = 2.2173;
+const ARCH_CEILING_Y_M = 2.234;
+const TRAVERSE_X_M = [-ARCH_HALF_WIDTH_M, -ARCH_HALF_WIDTH_M, 0.0, ARCH_HALF_WIDTH_M, ARCH_HALF_WIDTH_M];
+const TRAVERSE_Y_M = [-0.025, 2.255, 2.255, 2.255, -0.025];
+const TRAVERSE_BLOCK_Z_M = [-0.007, 3.007, 6.0212, 9.0355];
+
 export const BAND_NAMES = [
   'LEFT_UPRIGHT',
   'CEILING_LEFT',
@@ -161,32 +182,127 @@ export function interpolateEdge(graph, edgeId, u) {
   };
 }
 
-export function buildDenseSamples(graph, divisions = 52) {
-  const stride = 15;
-  const data = new Float32Array(graph.edges.length * divisions * stride);
-  let k = 0;
-  for (const edge of graph.edges) {
-    for (let i = 0; i < divisions; i += 1) {
-      const u = divisions === 1 ? 0 : i / (divisions - 1);
-      const p = interpolateEdge(graph, edge.id, u);
-      data[k++] = p.flat[0];
-      data[k++] = p.flat[1];
-      data[k++] = p.world[0];
-      data[k++] = p.world[1];
-      data[k++] = p.world[2];
-      data[k++] = edge.archId;
-      data[k++] = edge.traverseId;
-      data[k++] = edge.kind;
-      data[k++] = edge.bandId;
-      data[k++] = edge.zones[0];
-      data[k++] = edge.zones[1];
-      data[k++] = u;
-      data[k++] = edge.id;
-      data[k++] = edge.bayId;
-      data[k++] = edge.regionId;
+function pushSample(out, sample) {
+  out.push(
+    sample.flat[0], sample.flat[1],
+    sample.world[0], sample.world[1], sample.world[2],
+    sample.archId, sample.traverseId, sample.kind, sample.bandId,
+    sample.zones[0], sample.zones[1], sample.segmentU,
+    sample.edgeId, sample.bayId, sample.regionId,
+  );
+}
+
+function archBandAndU(section, index, count) {
+  if (section === 0) return [0, count <= 1 ? 0 : index / (count - 1)];
+  if (section === 1) {
+    // 148 ceiling LEDs = two physical halves of 74 LEDs each.
+    if (index < 74) return [1, index / 73];
+    return [2, (index - 74) / 73];
+  }
+  return [3, count <= 1 ? 0 : index / (count - 1)];
+}
+
+function physicalArchSamples(graph, out) {
+  for (let archId = 0; archId < ARCH_COUNT; archId += 1) {
+    const z = ARCH_X_M[archId];
+    const senderX = SENDER_X[archId] / 719;
+    let physicalIndex = 0;
+
+    const sections = [ARCH_LED_LEFT, ARCH_LED_CEILING, ARCH_LED_RIGHT];
+    for (let section = 0; section < sections.length; section += 1) {
+      const count = sections[section];
+      for (let i = 0; i < count; i += 1) {
+        const f = count <= 1 ? 0 : i / (count - 1);
+        let x;
+        let y;
+        if (section === 0) {
+          x = -ARCH_HALF_WIDTH_M;
+          y = ARCH_UPRIGHT_TOP_M * f;
+        } else if (section === 1) {
+          x = -ARCH_HALF_WIDTH_M + CEILING_WIDTH_M * f;
+          y = ARCH_CEILING_Y_M;
+        } else {
+          x = ARCH_HALF_WIDTH_M;
+          y = ARCH_UPRIGHT_TOP_M * (1 - f);
+        }
+
+        const [bandId, segmentU] = archBandAndU(section, i, count);
+        const edgeId = archId * BAND_COUNT + bandId;
+        const edge = graph.edges[edgeId];
+        const senderY = (physicalIndex + 1) / 414;
+        pushSample(out, {
+          flat: [senderX, senderY],
+          world: [x, y, z],
+          archId,
+          traverseId: -1,
+          kind: 0,
+          bandId,
+          zones: edge.zones,
+          segmentU,
+          edgeId,
+          bayId: -1,
+          regionId: bandRegion(bandId),
+        });
+        physicalIndex += 1;
+      }
     }
   }
-  return { data, stride, count: graph.edges.length * divisions };
+}
+
+function physicalTraverseSamples(graph, out) {
+  for (let traverseId = 0; traverseId < TRAVERSE_COUNT; traverseId += 1) {
+    for (let block = 0; block < TRAVERSE_BLOCK_COUNT; block += 1) {
+      const z0Physical = TRAVERSE_BLOCK_Z_M[block] + (traverseId === 0 ? 0.0 : 0.00125);
+      const z1Physical = TRAVERSE_BLOCK_Z_M[block] + (traverseId === 0 ? 3.0 : 2.99875);
+      for (let i = 0; i < TRAVERSE_LED_PER_BLOCK; i += 1) {
+        const f = i / (TRAVERSE_LED_PER_BLOCK - 1);
+        // Semantic depth stays canonical 0..12 m; the rendered world coordinate keeps TD's tiny fixture offsets.
+        const canonicalZ = block * 3.0 + f * 3.0;
+        const physicalZ = z0Physical + (z1Physical - z0Physical) * f;
+        const bayId = Math.min(BAY_COUNT - 1, Math.max(0, Math.floor(Math.min(canonicalZ, 11.999999) / 1.5)));
+        const edgeId = ARCH_COUNT * BAND_COUNT + traverseId * BAY_COUNT + bayId;
+        const edge = graph.edges[edgeId];
+        const segmentU = Math.max(0, Math.min(1, (canonicalZ - bayId * 1.5) / 1.5));
+        pushSample(out, {
+          flat: [canonicalZ / TUNNEL_M, SENDER_Y[traverseId] / 414],
+          world: [TRAVERSE_X_M[traverseId], TRAVERSE_Y_M[traverseId], physicalZ],
+          archId: -1,
+          traverseId,
+          kind: 1,
+          bandId: edge.bandId,
+          zones: edge.zones,
+          segmentU,
+          edgeId,
+          bayId,
+          regionId: -1,
+        });
+      }
+    }
+  }
+}
+
+// Historical name retained for engine compatibility. This no longer invents a uniform
+// number of samples per semantic edge. It emits the exact fixture point counts from ArtnetAll.
+export function buildDenseSamples(graph) {
+  const stride = 15;
+  const values = [];
+  physicalArchSamples(graph, values);
+  physicalTraverseSamples(graph, values);
+  const data = new Float32Array(values);
+  const count = data.length / stride;
+  if (count !== PHYSICAL_LED_COUNT) {
+    throw new Error(`Physical LED map mismatch: expected ${PHYSICAL_LED_COUNT}, got ${count}`);
+  }
+  return {
+    data,
+    stride,
+    count,
+    physical: {
+      arch_pixels: PHYSICAL_ARCH_LED_COUNT,
+      traverse_pixels: PHYSICAL_TRAVERSE_LED_COUNT,
+      total_pixels: PHYSICAL_LED_COUNT,
+    },
+  };
 }
 
 export function edgeIdBetween(graph, nodeA, nodeB) {
